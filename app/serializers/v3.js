@@ -38,12 +38,8 @@ export default JSONSerializer.extend({
     } else if (relationshipHash && !relationshipHash.type) {
       relationshipHash.type = type;
     }
-    return relationshipHash;
-  },
 
-  extractRelationships() {
-    let relationships = this._super(...arguments);
-    return relationships;
+    return relationshipHash;
   },
 
   keyForRelationship(key/* , typeClass, method*/) {
@@ -105,13 +101,17 @@ export default JSONSerializer.extend({
     return documentHash;
   },
 
-  normalize(/* modelClass, resourceHash*/) {
+  normalize() {
     let { data, included } = this._super(...arguments);
     if (!included) {
       included = [];
     }
     let store = this.store;
 
+    // if we have relationship data, attempt to include those as sideloaded
+    // records by adding them to the included array.
+    // We must have both relationships *and* included specified for this to
+    // work.
     if (data.relationships) {
       Object.keys(data.relationships).forEach(function (key) {
         let relationship = data.relationships[key];

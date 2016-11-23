@@ -2,22 +2,50 @@ import { Serializer } from 'ember-cli-mirage';
 
 export default Serializer.extend({
   serialize(object, request) {
+    if (object.attrs) {
+      return this.serializeSingle(object, request);
+    }
     return {
       '@type': 'branches',
-      branches: object.models.map(branch => {
-        const builds = branch.builds;
-
-        if (branch.builds && branch.builds.models.length) {
-          const lastBuild = branch.builds.models[builds.models.length - 1];
-
-          branch.attrs.last_build = this.serializerFor('build').serialize(lastBuild, request);
-        }
-
-        return branch.attrs;
-      }),
-      pagination: {
+      '@href': `/repo/${request.params.repository_id}/branches`,
+      '@representation': 'standard',
+      '@pagination': {
         count: object.length
-      }
+      },
+      branches: object.models.map(branch => this.serializeSingle(branch, request)),
     };
-  }
+  },
+
+  serializeSingle(branch, request) {
+    let repositoryId = request.params.repository_id;
+    let {
+      name,
+      default_branch,
+      exists_on_github
+    } = branch.attrs;
+
+    let response = {
+      '@type': 'branch',
+      '@href': `/repo/${repositoryId}/branch/${name}`,
+      '@representation': 'standard',
+      name,
+      default_branch,
+      exists_on_github,
+    };
+
+    const { builds } = branch;
+
+    if (builds && builds.models.length) {
+      const lastBuild = builds.models[builds.models.length - 1];
+
+      response.last_build = this.serializerFor('build').serializeEmbedded(lastBuild, request);
+    }
+
+    if (branch.repository) {
+      const repositorySerializer = this.serializerFor('repository');
+      response.repository = repositorySerializer.serializeEmbedded(branch.repository, request);
+    }
+
+    return response;
+  },
 });

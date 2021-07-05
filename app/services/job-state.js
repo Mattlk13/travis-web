@@ -1,59 +1,36 @@
-import { isEmpty } from '@ember/utils';
 import Service, { inject as service } from '@ember/service';
 import { task } from 'ember-concurrency';
-import fetchAll from 'travis/utils/fetch-all';
+import { computed } from '@ember/object';
+import { filter, reads, gt } from '@ember/object/computed';
+
+export const FINISHED_STATES = ['failed', 'canceled', 'passed'];
+export const RUNNING_STATES = ['started'];
+export const QUEUED_STATES = ['created', 'queued', 'booting', 'received'];
+export const UNFINISHED_STATES = QUEUED_STATES.concat(RUNNING_STATES);
 
 export default Service.extend({
   store: service(),
 
-  runningJobs: [],
-  queuedJobs: [],
-
-  fetchRunningJobs: task(function* () {
-    const runningJobs = this.runningJobs;
-
-    if (!isEmpty(runningJobs)) {
-      return runningJobs;
-    }
-
-    const runningStates = ['started', 'received'];
-    const result = yield this.store.filter(
-      'job',
-      job => runningStates.includes(job.get('state'))
-    );
-
-    // we don't run a query in filter above, because we want to get *all*
-    // of the running jobs, so if there's more than a page size, we need to
-    // paginate
-    fetchAll(this.store, 'job', { state: runningStates });
-
-    result.set('isLoaded', true);
-    this.set('runningJobs', result);
-
-    return result;
+  jobs: reads('peekJobs.lastSuccessful.value'),
+  jobsLoaded: gt('fetchUnfinishedJobs.performCount', 0),
+  sortedJobs: computed('jobs.@each.number', function () {
+    const { jobs } = this;
+    return jobs && jobs.sortBy('number');
   }),
 
-  fetchQueuedJobs: task(function* () {
-    const queuedJobs = this.queuedJobs;
+  runningJobs: filter('sortedJobs.@each.state', (job) => RUNNING_STATES.includes(job.state)),
+  queuedJobs: filter('sortedJobs.@each.state', (job) => QUEUED_STATES.includes(job.state)),
+  unfinishedJobs: computed('queuedJobs.[]', 'runningJobs.[]', function () {
+    return [...this.queuedJobs, ...this.runningJobs];
+  }),
 
-    if (!isEmpty(queuedJobs)) {
-      return queuedJobs;
-    }
+  peekJobs: task(function* () {
+    return yield this.store.peekAll('job');
+  }),
 
-    const queuedStates = ['created', 'queued'];
-    const result = yield this.store.filter(
-      'job',
-      job => queuedStates.includes(job.get('state'))
-    );
-
-    // we don't run a query in filter above, because we want to get *all*
-    // of the queued jobs, so if there's more than a page size, we need to
-    // paginate
-    fetchAll(this.store, 'job', { state: queuedStates });
-
-    result.set('isLoaded', true);
-    this.set('queuedJobs', result);
-
-    return result;
+  fetchUnfinishedJobs: task(function* () {
+    const unfinishedJobs = yield this.store.query('job', { state: UNFINISHED_STATES });
+    yield this.peekJobs.perform();
+    return unfinishedJobs;
   }),
 });

@@ -118,6 +118,7 @@
 .owner-tile {
   background: linear-gradient(to right, $pebble-grey 0%, $pebble-grey 10px, white 10px, white 100%) no-repeat;
   padding-left: 10px;
+  overflow: visible;
 
   @each $key, $value in $stateMap {
     &.#{$key} {
@@ -144,6 +145,10 @@
   .repo-title {
     font-size: 18px;
     margin: 0;
+
+    .shared {
+      margin-top: -2px;
+    }
   }
 }
 

@@ -1,5 +1,7 @@
-import { vcsUrl, vcsName, vcsVocab, vcsIcon } from 'travis/utils/vcs';
+import { vcsUrl, vcsConfig, vcsVocab, vcsIcon, availableProviders } from 'travis/utils/vcs';
 import { module, test } from 'qunit';
+
+const vcsName = (vcsType) => vcsConfig(vcsType).name;
 
 module('Unit | Utils | vcsName', function () {
   test('it defaults to Github', function (assert) {
@@ -16,8 +18,8 @@ module('Unit | Utils | vcsName', function () {
     assert.equal(vcsName('BitbucketRepository'), 'Bitbucket');
   });
 
-  test('it throws when vcs is not found in providers', function (assert) {
-    assert.throws(() => vcsName('OtherVcs'));
+  test('it returns default provider when vcs is not found in providers', function (assert) {
+    assert.equal(vcsName('OtherVcs'), 'GitHub');
   });
 });
 
@@ -26,7 +28,7 @@ module('Unit | Utils | vcsVocab', function () {
     assert.equal(vcsVocab('GithubRepository', 'pullRequest'), 'Pull Request');
     assert.equal(vcsVocab('AssemblaRepository', 'pullRequest'), 'Merge Request');
     assert.equal(vcsVocab('GithubRepository', 'organization'), 'Organization');
-    assert.equal(vcsVocab('AssemblaRepository', 'organization'), 'Portfolio');
+    assert.equal(vcsVocab('AssemblaRepository', 'organization'), 'Space');
   });
 
   test('throws if key is invalid', function (assert) {
@@ -51,5 +53,11 @@ module('Unit | Utils | vcsUrl', function () {
 
   test('throws if any param is missing', function (assert) {
     assert.throws(() => vcsUrl('branch', 'GithubRepository', { owner: 'owner', repo: 'repo' }));
+  });
+});
+
+module('Unit | Utils | availableProviders', function () {
+  test('returns the list of providers', function (assert) {
+    assert.deepEqual(availableProviders, ['assembla', 'bitbucket', 'gitlab', 'github']);
   });
 });

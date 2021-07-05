@@ -1,3 +1,8 @@
+<nav
+  class="option-button {{if this.isOpen 'is-open'}}"
+  {{on 'click' (action this.toggle)}}
+  {{on 'mouseleave' (action this.close)}}
+>
 <button class="option-display" type="button" title="Show more options">
   <span class="label-align">
     More options
@@ -26,7 +31,7 @@
       </LinkTo>
     </li>
   {{/if}}
-  {{#if this.displayTriggerBuildLink}}
+  {{#if (and this.displayTriggerBuildLink this.canOwnerBuild)}}
     <li>
       <button
         type="button"
@@ -36,5 +41,16 @@
         Trigger build
       </button>
     </li>
+  {{else}}
+    <li>
+      <button
+        type="button"
+        class="trigger-build-anchor"
+        disabled="disabled"
+      >
+        Trigger build
+      </button>
+    </li>
   {{/if}}
 </ul>
+</nav>

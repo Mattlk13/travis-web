@@ -74,6 +74,10 @@
     text-align: center;
   }
 
+  .section-bitbucket {
+    padding-bottom: 25px;
+  }
+
   .section-companies {
     @media #{$small-only} {
       padding: 40px 0px;
@@ -134,14 +138,14 @@
 
     .list-check {
       @media #{$medium-only} {
-        padding-left: 10px
+        padding-left: 0;
       }
-      padding-left: 39px;
+      padding-left: 20px;
       padding-top: 12px;
 
-      img {
+      .checkmark {
         @media #{$small-only} {
-          margin-right: 10px; 
+          margin-right: 10px;
         }
         width: 20px;
         height: auto;
@@ -164,12 +168,12 @@
 
   .list-check-container {
     @media #{$small-only} {
-      max-width: 338px;
+      max-width: 357px;
       margin: 0 auto;
     }
 
     @media #{$medium-only} {
-      max-width: 338px;
+      max-width: 345px;
       margin: 0 auto;
     }
 
@@ -188,7 +192,7 @@
       line-height: 50px;
       margin-bottom: 41px;
     }
-    
+
     p {
       color: #666666;
       font-size: 26px;
@@ -231,14 +235,14 @@
         flex-direction: row;
       }
 
-      p {
+      .build-steps {
         @media #{$small-only} {
-          width: 160px;
+          width: 200px;
           text-align: left;
           padding-left: 15px;
         }
         @media #{$medium-only} {
-          width: 160px;
+          width: 200px;
           text-align: left;
           padding-left: 15px;
         }
@@ -254,18 +258,13 @@
     }
 
     .branch-pr-container {
-      @media #{$small-only} {
-        display: grid;
-        grid-template-columns: .2fr 1fr;
-        margin: 0 auto;
-        width: 215px;
+      @media #{$small-up} {
+        display: flex;
+        justify-content: center;
       }
 
-      @media #{$medium-only} {
-        display: grid;
-        grid-template-columns: .2fr 1fr;
-        margin: 0 auto;
-        width: 215px;
+      @media #{$large-up} {
+        flex-direction: column;
       }
     }
 
@@ -288,10 +287,11 @@
 
       @media #{$large-up} {
         background-image: url("../images/landing-page/build-flow.png");
+        background-position: center center;
         background-repeat: no-repeat;
         width: 900px;
-        height: 114px;
-        background-size: 900px;
+        height: 116px;
+        background-size:100% auto;
         margin: 0 auto;
       }
     }
@@ -306,7 +306,7 @@
         background-size: 57px;
         margin-top: 7px;
       }
-      
+
       @media #{$large-up} {
         background-image: url("../images/landing-page/pr-flow.png");
         background-repeat: no-repeat;
@@ -477,7 +477,7 @@
       flex-wrap: wrap;
       align-items: center;
     }
-    
+
     li {
       margin-bottom: 30px;
       @media #{$medium-up} {
@@ -603,7 +603,7 @@
 
     li {
       flex: 0 0 16em;
-    
+
       p {
         @media #{$small-only} {
           padding: 0 60px;
@@ -616,7 +616,7 @@
         @media #{$small-up} {
           margin-left: -21px;
         }
-        
+
         width: 160px;
         margin-left: 10px;
         height: auto;
@@ -663,11 +663,40 @@
 .hero-button {
   @extend .landing-button;
 
+  &.multi-vcs {
+    &.org:not(:first-child) { margin-top: 10px }
+    &.org:not(:last-child) { margin-bottom: 0 }
+
+    &.cta-index-page {
+      font-size: 18px;
+      margin-bottom: 10px;
+
+      @media #{$small-only} {
+        display: block;
+        margin: 10px auto;
+      }
+
+      @media #{$medium-up} {
+        float: left;
+
+        &:first-child {
+          margin-right: 10px;
+        }
+      }
+
+      svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+  }
+
   svg {
     width: 30px;
     height: 30px;
     vertical-align: sub;
     margin-right: 0.4em;
+    fill: #fff;
   }
 
   &.org {
@@ -850,8 +879,7 @@ main {
   .landing-hero-container {
     @media #{$medium-up} {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-gap: 5rem;
+      grid-template-columns: 500px max-content;
       padding: 10px 1.07143rem;
       max-width: 1024px;
       margin: auto;
@@ -861,9 +889,9 @@ main {
 
 .landing-hero-text {
   h1 {
-    font-size: 35px;
+    font-size: 45px;
     font-weight: 300;
-    line-height: 1.35em;
+    line-height: 1.1em;
     color: #3eaaaf;
     margin-top: 1em;
     margin-bottom: 36px;
@@ -874,7 +902,11 @@ main {
     font-weight: 300;
     line-height: 1.5em;
     color: #666666;
-    margin-bottom: 60px;
+  }
+
+  .signin-link {
+    color: $turf-green;
+    border-bottom: 1px solid currentColor;
   }
 }
 
@@ -886,10 +918,7 @@ main {
   img {
     width: 450px;
     @media #{$large-up}{
-      position: relative;
-      left: 61px;
       width: 550px;
-      max-width: inherit;
     }
   }
 }
@@ -944,7 +973,7 @@ main {
   a {
     text-decoration: underline;
   }
-  
+
   .inner {
     @media #{$medium-up} {
       display: grid;
@@ -970,7 +999,7 @@ main {
       padding: 0 57px;
     }
   }
-  
+
   .section-languages-container {
     max-width: 500px;
     margin: 0 auto;
@@ -1022,17 +1051,15 @@ main {
     padding: 15px;
 
     .rails-logo {
-      width: 160px;
+      width: 90px;
       position: relative;
-      right: 37px;
-      bottom: 10px;
+      margin-bottom: 2rem;
     }
 
     .twitter-logo {
-      width: 160px;
+      width: 32px;
       position: relative;
-      bottom: 20px;
-      right: 80px;
+      margin-bottom: 2rem;
     }
 
     .quote-pypy-logo {
@@ -1083,7 +1110,7 @@ main {
     margin-top: 10px;
     margin-bottom: 64px;
   }
-  
+
   .start-building-button {
     color: white;
     font-size: 26px;
@@ -1099,5 +1126,3 @@ main {
     }
   }
 }
-
-

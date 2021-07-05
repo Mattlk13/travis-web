@@ -1,11 +1,14 @@
 import { module, test } from 'qunit';
 import { setupRenderingTest } from 'ember-qunit';
+import { setupMirage } from 'ember-cli-mirage/test-support';
 import { render } from '@ember/test-helpers';
 import hbs from 'htmlbars-inline-precompile';
 
 module('Integration | Component | build header', function (hooks) {
   setupRenderingTest(hooks);
-  const repo = { slug: 'travis-ci/travis-web' };
+  setupMirage(hooks);
+
+  const repo = { slug: 'travis-ci/travis-web', name: 'travis-web', vcsName: 'travis-web', ownerName: 'travis-ci', shared: true };
 
   test('render api build', async function (assert) {
     let commit = {
@@ -44,6 +47,7 @@ module('Integration | Component | build header', function (hooks) {
     assert.dom('.commit-stopwatch').hasAttribute('title', 'Started January 15, 2018 12:28:49');
     assert.dom('.commit-calendar').exists('displays a calendar after the job is passed');
     assert.dom('.commit-calendar').hasAttribute('title', 'Finished January 15, 2018 12:35:49');
+    assert.dom('.shared').exists('displays a shared repository indicator');
   });
 
   test('render push build', async function (assert) {
@@ -195,5 +199,60 @@ module('Integration | Component | build header', function (hooks) {
     assert.dom('.commit-calendar').doesNotExist('does not display calendar while running');
     assert.dom('.detail-job-os').exists('does display operating system');
     assert.dom('.detail-job-lang').exists('does display programming language');
+  });
+
+  test('show cpu architecture for job', async function (assert) {
+    let job = {
+      eventType: 'push',
+      status: 'running',
+      number: '1234.1',
+      os: 'linux',
+      language: 'ruby',
+      arch: 'arm64',
+      build: {
+        id: 123
+      },
+      repo,
+    };
+
+    this.set('job', job);
+    await render(hbs`{{build-header item=job}}`);
+    assert.dom('.detail-job-arch').exists('does display CPU architecture');
+  });
+
+  test('show prioritize heading if the build is prioritized', async function (assert) {
+    let build = {
+      eventType: 'push',
+      status: 'passed',
+      number: '1234',
+      priority: true,
+      branchName: 'feature-2',
+      branch: {
+        name: 'feature-2'
+      },
+      repo,
+    };
+
+    this.set('build', build);
+    await render(hbs`{{build-header item=build}}`);
+    assert.dom('.build-prioritize').hasText('Prioritized build');
+  });
+
+  test('does not show prioritize heading if the build is not prioritized', async function (assert) {
+    let build = {
+      eventType: 'push',
+      status: 'passed',
+      number: '1234',
+      priority: false,
+      branchName: 'feature-2',
+      branch: {
+        name: 'feature-2'
+      },
+      repo,
+    };
+
+    this.set('build', build);
+    await render(hbs`{{build-header item=build}}`);
+    assert.dom('.build-prioritize').doesNotExist();
   });
 });

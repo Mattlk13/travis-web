@@ -5,6 +5,12 @@ export default TravisRoute.extend({
   features: service(),
   tabStates: service(),
 
+  afterModel(repo) {
+    try {
+      return repo.get('currentBuild.request').then(request => request && request.fetchMessages.perform());
+    } catch (error) {}
+  },
+
   setupController(controller, model) {
     this._super(...arguments);
     this.controllerFor('repo').activate('current');
@@ -35,6 +41,13 @@ export default TravisRoute.extend({
     let controller = this.controllerFor('repo');
     controller.removeObserver('repo.active', this, 'renderTemplate');
     controller.removeObserver('repo.currentBuildId', this, 'renderTemplate');
+  },
+
+  beforeModel() {
+    const repo = this.modelFor('repo');
+    if (repo && !repo.repoOwnerAllowance) {
+      repo.fetchRepoOwnerAllowance.perform();
+    }
   },
 
   renderTemplate() {

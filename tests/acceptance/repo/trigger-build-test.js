@@ -7,27 +7,44 @@ import { Response } from 'ember-cli-mirage';
 import signInUser from 'travis/tests/helpers/sign-in-user';
 import { enableFeature } from 'ember-feature-flags/test-support';
 import { percySnapshot } from 'ember-percy';
+import { setupMirage } from 'ember-cli-mirage/test-support';
 
 module('Acceptance | repo/trigger build', function (hooks) {
   setupApplicationTest(hooks);
+  setupMirage(hooks);
 
   hooks.beforeEach(function () {
-    this.currentUser = server.create('user', {
+    this.server.create('allowance', {
+      id: 1,
+      subscription_type: 2,
+      public_repos: true,
+      private_repos: true,
+      user_usage: true,
+      pending_user_licenses: false,
+      concurrency_limit: 2
+    }),
+
+    this.currentUser = this.server.create('user', {
       name: 'Ada Lovelace',
       login: 'adal',
+      confirmed_at: Date.now()
     });
 
-    this.repo = server.create('repository', {
+    this.repo = this.server.create('repository', {
       name: 'difference-engine',
       slug: 'adal/difference-engine',
       permissions: {
         create_request: true
+      },
+      owner: {
+        login: 'adal',
+        id: 1
       }
     });
 
     const repoId = parseInt(this.repo.id);
 
-    const defaultBranch = server.create('branch', {
+    const defaultBranch = this.server.create('branch', {
       name: 'master',
       id: `/v3/repo/${repoId}/branch/master`,
       default_branch: true,
@@ -45,7 +62,7 @@ module('Acceptance | repo/trigger build', function (hooks) {
       sha: 'c0ffee'
     });
 
-    server.create('branch', {
+    this.server.create('branch', {
       name: 'deleted',
       id: `/v3/repo/${repoId}/branch/deleted`,
       default_branch: false,
@@ -61,7 +78,7 @@ module('Acceptance | repo/trigger build', function (hooks) {
     this.repo.update('permissions', { create_request: false });
     await triggerBuildPage.visit({ owner: 'adal', repo: 'difference-engine' });
 
-    assert.notOk(triggerBuildPage.popupTriggerLinkIsPresent, 'trigger build link is not rendered');
+    assert.ok(triggerBuildPage.popupTriggerLinkIsPresent, 'trigger build link is not rendered');
   });
 
   test('trigger link is present when user has the proper permissions and has been migrated on com', async function (assert) {
@@ -91,13 +108,13 @@ module('Acceptance | repo/trigger build', function (hooks) {
     this.repo.update('migration_status', 'migrated');
     signInUser(this.currentUser);
     await triggerBuildPage.visit({ owner: 'adal', repo: 'difference-engine' });
-    assert.notOk(triggerBuildPage.popupTriggerLinkIsPresent, 'trigger build link is not rendered');
+    assert.ok(triggerBuildPage.popupTriggerLinkIsPresent, 'trigger build link is not rendered');
   });
 
   test('triggering a custom build via the dropdown', async function (assert) {
     await triggerBuildPage.visit({ owner: 'adal', repo: 'difference-engine' });
 
-    assert.equal(currentURL(), 'adal/difference-engine', 'we are on the repo page');
+    assert.equal(currentURL(), '/github/adal/difference-engine', 'we are on the repo page');
     assert.ok(triggerBuildPage.popupIsHidden, 'modal is hidden');
 
     await triggerBuildPage.openPopup();
@@ -110,11 +127,11 @@ module('Acceptance | repo/trigger build', function (hooks) {
     await triggerBuildPage.clickSubmit();
 
     assert.ok(triggerBuildPage.popupIsHidden, 'modal is hidden again');
-    assert.equal(currentURL(), '/adal/difference-engine/builds/9999', 'we transitioned after the build was triggered');
+    assert.equal(currentURL(), '/github/adal/difference-engine/builds/9999', 'we transitioned after the build was triggered');
   });
 
   test('an error triggering a build is displayed', async function (assert) {
-    server.post('/repo/:repo_id/requests', function (schema, request) {
+    this.server.post('/repo/:repo_id/requests', function (schema, request) {
       return new Response(500, {}, {});
     });
 
@@ -126,7 +143,7 @@ module('Acceptance | repo/trigger build', function (hooks) {
   });
 
   test('a 429 shows a specific error message', async function (assert) {
-    server.post('/repo/:repo_id/requests', function (schema, request) {
+    this.server.post('/repo/:repo_id/requests', function (schema, request) {
       return new Response(429, {}, {});
     });
 

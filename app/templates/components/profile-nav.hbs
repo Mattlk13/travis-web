@@ -8,7 +8,7 @@
         <OrgItem @account={{this.user}} />
       </li>
     </ul>
-    <SyncButton />
+    <SyncButton @isOrganization={{this.isOrganization}}/>
   </section>
   {{#if this.showMigrationBetaBanner}}
     <section class="migrate-beta" data-test-sidebar-migrate>
@@ -48,17 +48,16 @@
       {{/each}}
     </ul>
   </section>
-  {{#if this.githubOrgsOauthAccessSettingsUrl}}
+  {{#if (and this.accessSettingsUrl (not this.user.isAssembla))}}
     <section class="profile-additional no-divider">
       <h2>
-        Missing an {{vcs-vocab this.model.vcsType 'organization'}}?
+        Missing {{indefinite-article (vcs-vocab this.model.vcsType 'organization')}} {{vcs-vocab this.model.vcsType 'organization'}}?
       </h2>
       <ExternalLinkTo
-        @href={{this.githubOrgsOauthAccessSettingsUrl}}
-        @title="Organizations Oauth Access Settings on GitHub"
+        @href={{this.accessSettingsUrl}}
+        @title="{{vcs-vocab this.model.vcsType 'organization' plural=true lower=false}} Access Settings on {{vcs-name this.user.vcsType}}"
       >
-        Review and add
-      </ExternalLinkTo>
+        Review and add</ExternalLinkTo>
       your authorized {{vcs-vocab this.model.vcsType 'organization' plural=true lower=true}}.
     </section>
   {{/if}}
@@ -113,10 +112,10 @@
               Settings
             </LinkTo>
           </li>
-          {{#if this.checkSubscriptionStatus}}
+          {{#if this.showSubscriptionTab}}
             <li data-test-billing-tab>
               <LinkTo @route="account.billing">
-                Subscription
+                Plan
               </LinkTo>
             </li>
           {{/if}}
@@ -124,6 +123,13 @@
             <li data-test-migrate-tab>
               <LinkTo @route="account.migrate">
                 Migrate
+              </LinkTo>
+            </li>
+          {{/if}}
+          {{#if this.showPlanUsageTab}}
+            <li data-test-plan-usage-tab>
+              <LinkTo @route="account.plan_usage">
+                Plan usage
               </LinkTo>
             </li>
           {{/if}}
@@ -141,10 +147,10 @@
               </LinkTo>
             </li>
           {{/if}}
-          {{#if this.checkSubscriptionStatus}}
+          {{#if this.showSubscriptionTab}}
             <li data-test-billing-tab>
               <LinkTo @route="organization.billing" @model={{this.model}}>
-                Subscription
+                Plan
               </LinkTo>
             </li>
           {{/if}}
@@ -152,6 +158,13 @@
             <li>
               <LinkTo @route="organization.migrate" @model={{this.model}}>
                 Migrate
+              </LinkTo>
+            </li>
+          {{/if}}
+          {{#if this.showPlanUsageTab}}
+            <li data-test-plan-usage-tab>
+              <LinkTo @route="organization.plan_usage" @model={{this.model}}>
+                Plan usage
               </LinkTo>
             </li>
           {{/if}}

@@ -1,5 +1,5 @@
-/* global Travis, _gaq */
-import $ from 'jquery';
+/* global Travis */
+import URL from 'url';
 import TravisRoute from 'travis/routes/basic';
 import config from 'travis/config/environment';
 import BuildFaviconMixin from 'travis/mixins/build-favicon';
@@ -15,33 +15,25 @@ export default TravisRoute.extend(BuildFaviconMixin, {
   featureFlags: service(),
   flashes: service(),
   repositories: service(),
-  router: service(),
 
   needsAuth: false,
 
   init() {
+    this.featureFlags;
+
     this.auth.afterSignOut(() => {
       this.afterSignOut();
     });
 
-    this.router.on('routeDidChange', () => {
-      if (config.gaCode) {
-        _gaq.push(['_trackPageview', location.pathname]);
-      }
-    });
-
     return this._super(...arguments);
   },
 
-  renderTemplate: function () {
-    if (this.get('features.proVersion')) {
-      $('body').addClass('pro');
-    }
-    return this._super(...arguments);
+  beforeModel() {
+    return this.auth.autoSignIn();
   },
 
   model() {
-    if (this.get('auth.signedIn')) {
+    if (this.auth.signedIn) {
       return this.get('featureFlags.fetchTask').perform();
     }
   },
@@ -119,8 +111,7 @@ export default TravisRoute.extend(BuildFaviconMixin, {
 
   actions: {
     signIn(runAfterSignIn = true) {
-      let authParams = this.modelFor('auth');
-      this.auth.signIn(null, authParams);
+      this.auth.signIn();
       if (runAfterSignIn) {
         this.afterSignIn();
       }
@@ -140,10 +131,10 @@ export default TravisRoute.extend(BuildFaviconMixin, {
 
     error(error) {
       if (error === 'needs-auth') {
-        this.set('auth.redirected', true);
-        let currentURL = new URL(window.location.href);
-
-        return this.transitionTo('auth', { queryParams: { redirectUri: currentURL.href }});
+        const currentURL = new URL(window.location.href);
+        const redirectUrl = currentURL.href;
+        const queryParams = { redirectUrl };
+        return this.transitionTo('signin', { queryParams });
       } else {
         return true;
       }
@@ -162,12 +153,14 @@ export default TravisRoute.extend(BuildFaviconMixin, {
   },
 
   afterSignOut() {
-    this.featureFlags.reset();
-    this.set('repositories.accessible', []);
-    this.setDefault();
-    if (this.get('features.enterpriseVersion')) {
-      return this.transitionTo('auth');
-    }
-    return this.transitionTo('index');
+    try {
+      this.featureFlags.reset();
+      this.set('repositories.accessible', []);
+      this.setDefault();
+      if (this.get('features.enterpriseVersion')) {
+        return this.transitionTo('signin');
+      }
+      return this.transitionTo('index');
+    } catch (error) {}
   },
 });

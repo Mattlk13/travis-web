@@ -1,0 +1,55 @@
+{{#if this.isLoading}}
+  <LoadingIndicator/>
+{{else}}
+  <section class="billing">
+    {{#if (or this.isEducation (not this.isEduProcessCompleted))}}
+      <Billing::Education
+        @account={{this.account}}
+        @selectedPlan={{this.selectedPlan}}
+        @subscription={{this.subscription}}
+        @newSubscription={{this.newV2Subscription}}
+        @isProcessCompleted={{this.isEduProcessCompleted}}
+      />
+    {{/if}}
+    {{#if this.isManual}}
+      <BillingManual
+        @subscription={{this.subscription}}
+        @account={{this.account}}
+        @selectedPlan={{this.selectedPlan}}
+      />
+    {{/if}}
+    {{#if this.isSubscription}}
+      <Billing::Subscription
+        @selectedPlan={{this.selectedPlan}}
+        @showPlansSelector={{this.showPlansSelector}}
+        @showAddonsSelector={{this.showAddonsSelector}}
+        @account={{this.account}}
+      />
+    {{/if}}
+    {{#if (or this.isTrial (not this.isTrialProcessCompleted))}}
+      <Billing::Trial
+        @account={{this.account}}
+        @selectedPlan={{this.selectedPlan}}
+        @newSubscription={{this.newV2Subscription}}
+        @isProcessCompleted={{this.isTrialProcessCompleted}}
+      />
+    {{/if}}
+  </section>
+  {{#if this.showInvoices}}
+    {{#if this.hasV2Subscription}}
+      {{#if this.v2subscription.isNotManual}}
+        <Billing::Invoices
+          @account={{this.account}}
+          @invoices={{this.invoices}}
+          @subscription={{this.v2subscription}}
+        />
+      {{/if}}
+    {{else}}
+      <Billing::Invoices
+        @account={{this.account}}
+        @invoices={{this.invoices}}
+        @subscription={{this.subscription}}
+      />
+    {{/if}}
+  {{/if}}
+{{/if}}

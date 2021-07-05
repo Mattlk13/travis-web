@@ -1,5 +1,11 @@
+@tailwind components;
+@import "tailwind/components";
+@tailwind utilities;
+@import "tailwind/utilities";
+
 @import "app/power-select-vars";
 @import "ember-power-select";
+@import "ember-power-calendar";
 
 @import "app/legacy/_functions";
 @import "app/legacy/_global";
@@ -55,6 +61,7 @@
 @import "app/modules/visibility-setting-list";
 @import "app/modules/overlay-backdrop";
 @import "app/modules/migrate-beta-dialog";
+@import "app/modules/prioritize-build";
 
 @import "app/animation/tractor";
 @import "app/animation/barricade";
@@ -83,10 +90,10 @@
 @import "app/layouts/features";
 @import "app/layouts/striped";
 @import "app/layouts/insights";
+@import "app/layouts/billing";
 
 @import "app/pages/landing";
 @import "app/pages/home-pro";
-@import "app/pages/getting-started";
 @import "app/pages/plans";
 @import "app/pages/logo";
 @import "app/pages/help";

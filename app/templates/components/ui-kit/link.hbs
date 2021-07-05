@@ -1,0 +1,30 @@
+{{#if this.route ~}}
+  <LinkTo
+    @route={{this.route}}
+    class={{this.allClasses}}
+    ...attributes
+  >
+    {{~ '' ~}}
+    <UiKit::Text
+      @tag='span'
+      @variant={{this.variant}}
+      @color={{this.color}}
+    >
+      {{~yield~}}
+    </UiKit::Text>
+    {{~ '' ~}}
+  </LinkTo>
+{{~else~}}
+  <UiKit::Text
+    @tag='a'
+    @variant={{this.variant}}
+    @color={{this.color}}
+    @size={{this.size}}
+    href={{this.href}}
+    rel={{this.rel}}
+    target={{this.target}}
+    ...attributes
+  >
+    {{~yield~}}
+  </UiKit::Text>
+{{~/if}}

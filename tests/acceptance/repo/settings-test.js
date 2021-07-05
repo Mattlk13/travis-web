@@ -3,34 +3,41 @@ import { setupApplicationTest } from 'travis/tests/helpers/setup-application-tes
 import { Response } from 'ember-cli-mirage';
 import { percySnapshot } from 'ember-percy';
 import settingsPage from 'travis/tests/pages/settings';
+import userManagement from 'travis/tests/pages/user-management';
 import topPage from 'travis/tests/pages/top';
 import signInUser from 'travis/tests/helpers/sign-in-user';
 import { selectChoose, selectSearch } from 'ember-power-select/test-support';
-
 import moment from 'moment';
+import { setupMirage } from 'ember-cli-mirage/test-support';
 
 module('Acceptance | repo settings', function (hooks) {
   setupApplicationTest(hooks);
+  setupMirage(hooks);
 
   hooks.beforeEach(async function () {
-    const currentUser = server.create('user', {
+    const currentUser = this.server.create('user', {
       name: 'User Name',
-      login: 'user-login',
+      login: 'user-login'
     });
-
     await signInUser(currentUser);
 
     // create organization
-    server.create('organization', {
+    this.server.create('organization', {
       name: 'Org Name',
       login: 'org-login',
     });
 
-    const repository = server.create('repository', {
+    this.server.createList('allowance', 2, {subscription_type: 1});
+    const repository = this.server.create('repository', {
       name: 'repository-name',
       slug: 'org-login/repository-name',
-      private: true
+      private: true,
+      permissions: {
+        admin: true
+      },
+      owner: { login: 'org-login', id: 2 }
     });
+
     repository.attrs.permissions.create_cron = true;
 
     repository.createSetting({ name: 'builds_only_with_travis_yml', value: true });
@@ -56,21 +63,21 @@ module('Acceptance | repo settings', function (hooks) {
 
     const repoId = parseInt(repository.id);
 
-    const dailyBranch = server.create('branch', {
+    const dailyBranch = this.server.create('branch', {
       name: 'daily-branch',
       id: `/v3/repo/${repoId}/branch/daily-branch`,
       exists_on_github: true,
       repository
     });
 
-    const weeklyBranch = server.create('branch', {
+    const weeklyBranch = this.server.create('branch', {
       name: 'weekly-branch',
       id: `/v3/repo/${repoId}/branch/weekly-branch`,
       exists_on_github: true,
       repository
     });
 
-    this.dailyCron = server.create('cron', {
+    this.dailyCron = this.server.create('cron', {
       interval: 'daily',
       dont_run_if_recent_build_exists: false,
       last_run: moment(),
@@ -79,7 +86,7 @@ module('Acceptance | repo settings', function (hooks) {
       repository
     });
 
-    server.create('cron', {
+    this.server.create('cron', {
       interval: 'weekly',
       dont_run_if_recent_build_exists: true,
       last_run: moment(),
@@ -123,7 +130,7 @@ module('Acceptance | repo settings', function (hooks) {
       assert.equal(cron.lastRun.text, 'Ran less than a minute ago');
       assert.equal(cron.lastRun.title, this.dailyCron.last_run.toISOString());
 
-      assert.equal(cron.nextRun.text, 'Scheduled in about 24 hours from now');
+      assert.equal(cron.nextRun.text, 'Scheduled in a day from now');
       assert.equal(cron.nextRun.title, this.dailyCron.next_run.toISOString());
 
       assert.ok(cron.dontRunIfRecentBuildExists.text.indexOf('Always run') === 0, 'expected cron to run even if there is a build in the last 24h');
@@ -146,12 +153,20 @@ module('Acceptance | repo settings', function (hooks) {
     assert.notOk(settingsPage.autoCancelPullRequests.exists, 'expected no auto-cancel pull requests switch when flag not present in API response');
   });
 
+  test('view User Management modal', async function (assert) {
+    await settingsPage.visit({ organization: 'org-login', repo: 'repository-name' });
+    await userManagement.visit();
+
+    assert.equal(userManagement.username.text, 'org-login (org-login)');
+    assert.equal(userManagement.role.text, '');
+  });
+
   test('change general settings', async function (assert) {
     await settingsPage.visit({ organization: 'org-login', repo: 'repository-name' });
 
     const settingToRequestBody = {};
 
-    server.patch(`/repo/${this.repository.id}/setting/:setting`, function (schema, request) {
+    this.server.patch(`/repo/${this.repository.id}/setting/:setting`, function (schema, request) {
       settingToRequestBody[request.params.setting] = JSON.parse(request.requestBody);
     });
 
@@ -182,19 +197,19 @@ module('Acceptance | repo settings', function (hooks) {
 
     const deletedIds = [];
 
-    server.delete('/settings/env_vars/:id', function (schema, request) {
+    this.server.delete('/settings/env_vars/:id', function (schema, request) {
       deletedIds.push(request.params.id);
     });
 
     await settingsPage.environmentVariables[0].delete();
 
-    assert.equal(deletedIds.pop(), 'a', 'expected the server to have received a deletion request for the first environment variable');
+    assert.equal(deletedIds.pop(), 'a', 'expected the this.server to have received a deletion request for the first environment variable');
     assert.equal(settingsPage.environmentVariables.length, 1, 'expected only one environment variable to remain');
     assert.equal(settingsPage.environmentVariables[0].name, 'published', 'expected the formerly-second variable to be first');
 
     let requestBodies = [];
 
-    server.post('/settings/env_vars', function (schema, request) {
+    this.server.post('/settings/env_vars', function (schema, request) {
       const parsedRequestBody = JSON.parse(request.requestBody);
       parsedRequestBody.env_var.id = '1919';
       requestBodies.push(parsedRequestBody);
@@ -225,7 +240,7 @@ module('Acceptance | repo settings', function (hooks) {
     // This will save env var with branch
     requestBodies = [];
 
-    server.post('/settings/env_vars', function (schema, request) {
+    this.server.post('/settings/env_vars', function (schema, request) {
       const parsedRequestBody = JSON.parse(request.requestBody);
       parsedRequestBody.env_var.id = '1920';
       requestBodies.push(parsedRequestBody);
@@ -234,7 +249,7 @@ module('Acceptance | repo settings', function (hooks) {
 
     let branchName = 'foo';
 
-    server.create('branch', {
+    this.server.create('branch', {
       name: branchName,
       id: `/v3/repo/${this.repository.id}/branch/food`,
       exists_on_github: true,
@@ -262,7 +277,7 @@ module('Acceptance | repo settings', function (hooks) {
     } });
 
     // This will trigger a client-side error
-    server.post('/settings/env_vars', () => new Response(403, {}, {}));
+    this.server.post('/settings/env_vars', () => new Response(403, {}, {}));
 
     await settingsPage.environmentVariableForm.fillName('willFail');
     await settingsPage.environmentVariableForm.fillValue('true');
@@ -271,14 +286,14 @@ module('Acceptance | repo settings', function (hooks) {
     assert.equal(topPage.flashMessage.text, 'There was an error saving this environment variable.');
 
     // This will cause deletions to fail
-    server.delete('/settings/env_vars/:id', () => new Response(500, {}, {}));
+    this.server.delete('/settings/env_vars/:id', () => new Response(500, {}, {}));
 
     await settingsPage.environmentVariables[1].delete();
 
     assert.equal(settingsPage.environmentVariables.length, 3, 'expected the environment variable to remain');
     assert.equal(topPage.flashMessage.text, 'There was an error deleting this environment variable.');
 
-    server.delete('/settings/env_vars/:id', () => new Response(404, {}, {}));
+    this.server.delete('/settings/env_vars/:id', () => new Response(404, {}, {}));
 
     await settingsPage.environmentVariables[1].delete();
 
@@ -293,7 +308,7 @@ module('Acceptance | repo settings', function (hooks) {
 
     const deletedIds = [];
 
-    server.delete('/cron/:id', function (schema, request) {
+    this.server.delete('/cron/:id', function (schema, request) {
       deletedIds.push(request.params.id);
       schema.db.crons.remove(request.params.id);
       return {};
@@ -301,7 +316,7 @@ module('Acceptance | repo settings', function (hooks) {
 
     await settingsPage.crons[0].delete();
 
-    assert.equal(deletedIds.pop(), this.dailyCron.id, 'expected the server to have received a deletion request for the first cron');
+    assert.equal(deletedIds.pop(), this.dailyCron.id, 'expected the this.server to have received a deletion request for the first cron');
     assert.equal(settingsPage.crons.length, 1, 'expected only one cron to remain');
     done();
   });
@@ -309,7 +324,7 @@ module('Acceptance | repo settings', function (hooks) {
   test('create a new cron', async function (assert) {
     let branchName = 'foo';
 
-    server.create('branch', {
+    this.server.create('branch', {
       name: branchName,
       id: `/v3/repo/${this.repository.id}/branch/food`,
       exists_on_github: true,
@@ -317,8 +332,8 @@ module('Acceptance | repo settings', function (hooks) {
     });
 
     await settingsPage.visit({ organization: 'org-login', repo: 'repository-name' });
-    await selectSearch(settingsPage.cronBrancheSelect.scope, branchName);
-    await selectChoose(settingsPage.cronBrancheSelect.scope, branchName);
+    await selectSearch(settingsPage.cronBranchSelect.scope, branchName);
+    await selectChoose(settingsPage.cronBranchSelect.scope, branchName);
     await settingsPage.addCronSubmit.click();
 
     assert.equal(settingsPage.crons.length, 3, 'expected to load all existed crons');
@@ -329,13 +344,13 @@ module('Acceptance | repo settings', function (hooks) {
 
     const deletedIds = [];
 
-    server.delete('/settings/ssh_key/:id', function (schema, request) {
+    this.server.delete('/settings/ssh_key/:id', function (schema, request) {
       deletedIds.push(request.params.id);
     });
 
     await settingsPage.sshKey.delete();
 
-    assert.equal(deletedIds.pop(), this.repository.id, 'expected the server to have received a deletion request for the SSH key');
+    assert.equal(deletedIds.pop(), this.repository.id, 'expected the this.server to have received a deletion request for the SSH key');
 
     assert.equal(settingsPage.sshKey.name, 'Default');
     assert.equal(settingsPage.sshKey.fingerprint, 'aa:bb:cc:dd');
@@ -343,15 +358,15 @@ module('Acceptance | repo settings', function (hooks) {
   });
 
   test('add SSH key', async function (assert) {
-    server.schema.db.sshKeys.remove();
+    this.server.schema.db.sshKeys.remove();
 
     const requestBodies = [];
 
-    server.get(`/settings/ssh_key/${this.repository.id}`, function (schema, request) {
+    this.server.get(`/settings/ssh_key/${this.repository.id}`, function (schema, request) {
       return new Response(429, {}, {});
     });
 
-    server.patch(`/settings/ssh_key/${this.repository.id}`, (schema, request) => {
+    this.server.patch(`/settings/ssh_key/${this.repository.id}`, (schema, request) => {
       const newKey = JSON.parse(request.requestBody);
       requestBodies.push(newKey);
       newKey.id = this.repository.id;
@@ -375,10 +390,12 @@ module('Acceptance | repo settings', function (hooks) {
   });
 
   test('the SSH key section is hidden for public repositories', async function (assert) {
+    this.server.get(`/repos/${this.repository.id}/key`, (s, r) => new Response(404, {}, {}));
     this.repository.private = false;
     await settingsPage.visit({ organization: 'org-login', repo: 'repository-name' });
 
     assert.dom('[data-test-ssh-key-section]').doesNotExist();
+    assert.dom('[data-test-settings-content]').exists();
   });
 
   test('shows disabled modal message for migrated repository on .org', async function (assert) {
@@ -399,7 +416,7 @@ module('Acceptance | repo settings', function (hooks) {
 
     const settingToRequestBody = {};
 
-    server.patch(`/repo/${this.repository.id}/setting/:setting`, function (schema, request) {
+    this.server.patch(`/repo/${this.repository.id}/setting/:setting`, function (schema, request) {
       settingToRequestBody[request.params.setting] = JSON.parse(request.requestBody);
     });
 
@@ -426,7 +443,7 @@ module('Acceptance | repo settings', function (hooks) {
 
     const settingToRequestBody = {};
 
-    server.patch(`/repo/${this.repository.id}/setting/:setting`, function (schema, request) {
+    this.server.patch(`/repo/${this.repository.id}/setting/:setting`, function (schema, request) {
       settingToRequestBody[request.params.setting] = JSON.parse(request.requestBody);
     });
 

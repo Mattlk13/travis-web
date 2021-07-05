@@ -3,17 +3,20 @@ import { module, test } from 'qunit';
 import { visit } from '@ember/test-helpers';
 import { setupApplicationTest } from 'travis/tests/helpers/setup-application-test';
 import signInUser from 'travis/tests/helpers/sign-in-user';
+import { setupMirage } from 'ember-cli-mirage/test-support';
 
 module('Acceptance | builds/current tab', function (hooks) {
   setupApplicationTest(hooks);
+  setupMirage(hooks);
 
   hooks.beforeEach(function () {
-    const currentUser = server.create('user');
+    const currentUser = this.server.create('user', {login: 'travis-ci'});
     signInUser(currentUser);
+    this.server.create('allowance', {subscription_type: 1});
   });
 
   test('renders most recent repository without builds', async function (assert) {
-    server.create('repository');
+    this.server.create('repository', {owner: {login: 'travis-ci', id: 1}});
 
     await visit('/travis-ci/travis-web');
 
@@ -22,13 +25,13 @@ module('Acceptance | builds/current tab', function (hooks) {
   });
 
   test('renders most recent repository and most recent build when builds present, single-job build shows job status instead', async function (assert) {
-    let repository =  server.create('repository', { slug: 'travis-ci/travis-web' });
+    let repository =  this.server.create('repository', { slug: 'travis-ci/travis-web', owner: {login: 'travis-ci', id: 1} });
 
-    const branch = server.create('branch', { name: 'acceptance-tests' });
-    let  gitUser = server.create('git-user', { name: 'Mr T' });
-    let commit = server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
-    let build = server.create('build', { number: '5', state: 'started', repository, branch, commit });
-    let job = server.create('job', { number: '1234.1', state: 'received', build, commit, repository, config: { language: 'Hello' } });
+    const branch = this.server.create('branch', { name: 'acceptance-tests' });
+    let  gitUser = this.server.create('git-user', { name: 'Mr T' });
+    let commit = this.server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
+    let build = this.server.create('build', { number: '5', state: 'started', repository, branch, commit });
+    let job = this.server.create('job', { number: '1234.1', state: 'received', build, commit, repository, config: { language: 'Hello' } });
 
     commit.update('build', build);
     commit.update('job', job);
@@ -45,14 +48,14 @@ module('Acceptance | builds/current tab', function (hooks) {
   });
 
   test('renders the repository and subscribes to private log channel for a private repository', async function (assert) {
-    let repository =  server.create('repository', { slug: 'travis-ci/travis-web', private: true });
+    let repository =  this.server.create('repository', { slug: 'travis-ci/travis-web', private: true, owner: {login: 'travis-ci', id: 1} });
 
-    const branch = server.create('branch', { name: 'acceptance-tests' });
-    let  gitUser = server.create('git-user', { name: 'Mr T' });
-    let commit = server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
-    let build = server.create('build', { number: '5', state: 'started', repository, branch, commit });
-    let job = server.create('job', { number: '1234.1', state: 'received', build, commit, repository, config: { language: 'Hello' } });
-    server.create('log', { id: job.id, content: 'teh log' });
+    const branch = this.server.create('branch', { name: 'acceptance-tests' });
+    let  gitUser = this.server.create('git-user', { name: 'Mr T' });
+    let commit = this.server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
+    let build = this.server.create('build', { number: '5', state: 'started', repository, branch, commit });
+    let job = this.server.create('job', { number: '1234.1', state: 'received', build, commit, repository, config: { language: 'Hello' } });
+    this.server.create('log', { id: job.id, content: 'teh log' });
 
     commit.update('build', build);
     commit.update('job', job);
@@ -66,12 +69,12 @@ module('Acceptance | builds/current tab', function (hooks) {
   });
 
   test('error message when build jobs array is empty', async function (assert) {
-    let repository =  server.create('repository', { slug: 'travis-ci/travis-web' });
+    let repository =  this.server.create('repository', { slug: 'travis-ci/travis-web', owner: {login: 'travis-ci', id: 1} });
 
-    const branch = server.create('branch', { name: 'acceptance-tests' });
-    let  gitUser = server.create('git-user', { name: 'Mr T' });
-    let commit = server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
-    let build = server.create('build', { number: '5', state: 'passed', repository, branch, commit });
+    const branch = this.server.create('branch', { name: 'acceptance-tests' });
+    let  gitUser = this.server.create('git-user', { name: 'Mr T' });
+    let commit = this.server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
+    let build = this.server.create('build', { number: '5', state: 'passed', repository, branch, commit });
 
     commit.update('build', build);
 
@@ -81,7 +84,7 @@ module('Acceptance | builds/current tab', function (hooks) {
   });
 
   test('shows user link to .com if viewing migrated repository on .org', async function (assert) {
-    server.create('repository', { slug: 'travis-ci/travis-web', active: false, migration_status: 'migrated'});
+    this.server.create('repository', { slug: 'travis-ci/travis-web', active: false, migration_status: 'migrated', owner: {login: 'travis-ci', id: 1}});
     await visit('/travis-ci/travis-web');
 
     assert.dom('[data-test-not-active-migrated-subtext]').exists();

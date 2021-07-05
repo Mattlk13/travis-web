@@ -15,10 +15,17 @@ export default TravisRoute.extend({
   },
 
   model() {
-    return this.modelFor('repo').get('pullRequests');
+    return this.modelFor('repo');
   },
 
   titleToken() {
     return 'Pull Requests';
   },
+
+  beforeModel() {
+    const repo = this.modelFor('repo');
+    if (repo && !repo.repoOwnerAllowance) {
+      repo.fetchRepoOwnerAllowance.perform();
+    }
+  }
 });

@@ -3,7 +3,6 @@
 const EmberApp = require('ember-cli/lib/broccoli/ember-app');
 const Funnel = require('broccoli-funnel');
 const SVGO = require('svgo');
-const Sass = require('node-sass');
 
 module.exports = function () {
   let fingerprint;
@@ -43,9 +42,10 @@ module.exports = function () {
     },
     'ember-prism': {
       'components': ['yaml'],
-    },
-    sassOptions: {
-      implementation: Sass
+      plugins: [
+        'line-numbers',
+        'line-highlight'
+      ],
     },
     svg: {
       optimize: false,
@@ -58,9 +58,15 @@ module.exports = function () {
       optimizer: {
         svgoModule: SVGO,
         plugins: [
+          { prefixIds: true },
           { removeViewBox: false },
           { removeTitle: false },
           { removeDesc: false },
+          {
+            removeUnknownsAndDefaults: {
+              unknownContent: false,
+            }
+          },
           {
             inlineStyles: {
               onlyMatchedOnce: false,
@@ -71,10 +77,28 @@ module.exports = function () {
       }
     },
     'ember-composable-helpers': {
-      only: ['sort-by', 'compute', 'contains']
+      only: ['sort-by', 'compute', 'contains', 'toggle']
     },
     'ember-power-select': {
       theme: false
+    },
+    postcssOptions: {
+      compile: {
+        enabled: true,
+        extension: 'scss',
+        parser: require('postcss-scss'),
+        plugins: [
+          require('@csstools/postcss-sass'),
+          require('tailwindcss')('./config/tailwind.js')
+        ]
+      }
+    },
+    outputPaths: {
+      app: {
+        css: {
+          'tailwind/base': '/assets/tailwind-base.css'
+        }
+      }
     }
   });
 
@@ -89,6 +113,7 @@ module.exports = function () {
   importNpmDependency(app, 'node_modules/visibilityjs/index.js');
   importNpmDependency(app, 'node_modules/ansiparse/lib/ansiparse.js', 'amd');
   importNpmDependency(app, 'node_modules/yamljs/index.js');
+  importNpmDependency(app, 'node_modules/deep-freeze/index.js');
 
   return app.toTree(emojiAssets);
 };

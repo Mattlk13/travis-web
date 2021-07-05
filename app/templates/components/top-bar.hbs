@@ -1,16 +1,24 @@
-<div class="topbar {{if this.isOpen 'has-autoheight'}} {{if this.showBroadcasts 'has-autoheight'}}" >
+<div class="topbar {{if this.isNavigationOpen 'expanded'}} {{if this.showBroadcasts 'expanded'}}" >
+  <HeaderBurgerMenu @isOpen={{this.isNavigationOpen}} @onClick={{action 'toggleNavigation'}} />
   <h1 id="logo" class="logo">
-    <LinkTo @route="index">
-      Travis CI
-    </LinkTo>
+    <ExternalLinkTo
+      @content="Travis CI"
+      @href="https://travis-ci.com"
+    />
   </h1>
-  <HeaderBurgerMenu @isOpen={{this.isOpen}} />
   <HeaderBroadcasts @showBroadcasts={{this.showBroadcasts}} />
-  <HeaderLinks @isOpen={{this.isOpen}} />
+  <HeaderLinks @isOpen={{this.isNavigationOpen}} />
+  <ProfileMenu />
 </div>
+{{#if this.isUnconfirmed}}
+ <UnconfirmedUserBanner />
+{{/if}}
 {{#if this.features.enterpriseVersion}}
   <EnterpriseBanner />
 {{/if}}
+{{#unless this.features.proVersion}}
+  <MigrationBanner />
+{{/unless}}
 {{#if hasBlock}}
   {{yield}}
 {{else if this.showCta}}

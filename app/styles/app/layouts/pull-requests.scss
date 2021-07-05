@@ -39,6 +39,14 @@
       padding-left: 0.4em;
     }
 
+    .download-export {
+      text-decoration: none;
+      border-bottom: 1px solid $asphalt-grey;
+      padding-bottom: 0;
+      transition: color 200ms ease, border 200ms ease;
+      cursor: pointer;
+    }
+
     .row-branch {
       flex: 0 0 30%;
       position: relative;
@@ -79,21 +87,16 @@
     }
 
     .two-line:nth-of-type(2) {
-      flex: 0 0 22%;
+      flex: 0 0 20%;
       margin-left: 1em;
     }
 
     .two-line:nth-of-type(3) {
-      flex: 0 0 22%;
+      flex: 0 0 20%;
     }
 
     .two-line:last-of-type {
       flex: 0 0 2em;
-    }
-
-    .row-item.actions {
-      overflow: visible;
-      transform: translate(0, -3px);
     }
   }
 }

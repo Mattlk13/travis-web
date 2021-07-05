@@ -541,6 +541,7 @@
   .build-flows {
     background-color: #FAFAFC;
     text-align: center;
+    margin-bottom: 100px;
 
     h2 {
       color: #666666;
@@ -620,15 +621,18 @@
         background-size: 57px;
         margin-top: 7px;
       }
+
       @media #{$large-up} {
         background-image: url("../images/landing-page/build-flow.png");
+        background-position: center center;
         background-repeat: no-repeat;
         width: 900px;
-        height: 114px;
-        background-size: 900px;
+        height: 116px;
+        background-size:100% auto;
         margin: 0 auto;
       }
     }
+
 
     .build-pr-image {
       @media #{$small-up} {
@@ -639,6 +643,7 @@
         background-size: 57px;
         margin-top: 7px;
       }
+
       @media #{$large-up} {
         background-image: url("../images/landing-page/pr-flow.png");
         background-repeat: no-repeat;
@@ -818,16 +823,14 @@
           border-radius: 2px;
           padding: 15px;
           .rails-logo {
-            width: 160px;
+            width: 90px;
             position: relative;
-            right: 37px;
-            bottom: 10px;
+            margin-bottom: 2rem;
           }
           .twitter-logo {
-            width: 160px;
+            width: 32px;
             position: relative;
-            bottom: 20px;
-            right: 80px;
+            margin-bottom: 2rem;
           }
           .quote-pypy-logo {
             width: 100px;
@@ -905,7 +908,7 @@
       }
       padding: 0 60px 0 60px;
 
-      
+
     }
 
     .landing-features-list .features-checked {
@@ -997,9 +1000,53 @@
   }
 }
 
-.landing-page {
+.profile.menu.signed-out {
+  line-height: 0;
+  margin-top: 11px;
+  text-align: center;
+
   .navigation-nested {
     background-color: white;
+    margin: 31px 0 0;
+    box-shadow: 0 -6px 0 #fff, 0 1px 6px rgba(0,0,0, .15);
+    width: 100%;
+    border-top-right-radius: 0;
+    border-top-left-radius: 0;
+    z-index: 35;
+
+    .action {
+      cursor: pointer;
+      display: block;
+      padding: 7px 10px;
+      width: 100%;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+
+      &:hover {
+        background-color: #EAEAEA;
+      }
+    }
+
+    ~ .auth-button {
+      width: 192px;
+      cursor: default;
+      padding-top: 10px;
+      position: relative;
+      z-index: 36;
+
+      &:hover {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+    }
+
+    &:hover ~ .auth-button {
+      color: #fff;
+      background-color: #2EB459;
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
   }
 }
 

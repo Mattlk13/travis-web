@@ -1,7 +1,9 @@
 import Component from '@ember/component';
 import { computed } from '@ember/object';
 import {
+  match,
   reads,
+  empty,
   notEmpty,
   or,
   not,
@@ -15,6 +17,7 @@ import window from 'ember-window-mock';
 import { task } from 'ember-concurrency';
 import fetchAll from 'travis/utils/fetch-all';
 
+const { providers } = config;
 const { appName, migrationRepositoryCountLimit } = config.githubApps;
 
 export default Component.extend({
@@ -25,6 +28,11 @@ export default Component.extend({
 
   login: reads('owner.login'),
 
+  skipGitHubAppsInstallation: or('isNotGithubRepository', 'hasGitHubAppsInstallation'),
+  isGithubRepository: or('isOwnerVcsTypeEmpty', 'isMatchGithub'),
+  isMatchGithub: match('owner.vcsType', /Github\S+$/),
+  isOwnerVcsTypeEmpty: empty('owner.vcsType'),
+  isNotGithubRepository: not('isGithubRepository'),
   hasGitHubAppsInstallation: notEmpty('owner.installation'),
 
   isEnterprise: reads('features.enterpriseVersion'),
@@ -71,7 +79,7 @@ export default Component.extend({
 
   appsActivationURL: computed('owner.githubId', function () {
     let githubId = this.get('owner.githubId');
-    return `https://github.com/apps/${appName}/installations/new/permissions?suggested_target_id=${githubId}`;
+    return `${config.githubAppsEndpoint}/${appName}/installations/new/permissions?suggested_target_id=${githubId}`;
   }),
 
   appsManagementURL: computed(
@@ -84,7 +92,7 @@ export default Component.extend({
       let installationGithubId = this.get('owner.installation.githubId');
 
       if (appName && appName.length) {
-        return `https://github.com/apps/${appName}/installations/new/permissions?suggested_target_id=${ownerGithubId}`;
+        return `${config.githubAppsEndpoint}/${appName}/installations/new/permissions?suggested_target_id=${ownerGithubId}`;
       } else if (isOrganization) {
         return `https://github.com/organizations/${login}/settings/installations/${installationGithubId}`;
       } else {
@@ -103,6 +111,7 @@ export default Component.extend({
 
   migrate: task(function* () {
     let queryParams = {
+      provider: providers.github.urlPrefix,
       sort_by: 'name',
       'repository.managed_by_installation': false,
       'repository.active': true,
@@ -119,7 +128,7 @@ export default Component.extend({
     let githubQueryParams = repositories.map(repo => `repository_ids[]=${repo.githubId}`).join('&');
 
     window.location.href =
-      `https://github.com/apps/${appName}/installations/new/permissions` +
+      `${config.githubAppsEndpoint}/${appName}/installations/new/permissions` +
       `?suggested_target_id=${this.owner.githubId}&${githubQueryParams}`;
   })
 });

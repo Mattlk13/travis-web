@@ -1,3 +1,7 @@
+<li
+  class="rows rows--dashboard {{if this.repo.active 'is-active'}}"
+  {{on 'mouseleave' (action this.closeDropup)}}
+>
 <div class="dash-head">
   <button
     class="dash-star {{if this.repo.starred 'is-starred'}}"
@@ -15,10 +19,10 @@
 <div class="dash-body">
   <div class="dash-main">
     <header class="fade-out dash-header">
-      <h2 class="row-label">
+      <h2 class="row-label repo-dashboard">
         <LinkTo
           @route="owner"
-          @model={{this.repo.owner.login}}
+          @models={{array this.repo.provider this.repo.ownerName}}
           @title={{this.repo.owner.login}}
         >
           {{this.repo.owner.login}}
@@ -27,10 +31,13 @@
       <h1 class="row-content">
         <LinkTo
           @route="repo"
-          @models={{array this.repo.owner.login this.repo.name}}
+          @models={{array this.repo.provider this.repo.urlOwnerName this.repo.urlName}}
           @title={{this.repo.name}}
         >
           {{this.repo.name}}
+          {{#if this.repo.shared}}
+            <SvgImage @name="icon-shared" @alt="Shared repository" @class="icon shared" />
+          {{/if}}
         </LinkTo>
       </h1>
     </header>
@@ -48,8 +55,9 @@
             <LinkTo
               @route="build"
               @models={{array
-                this.repo.owner.login
-                this.repo.name
+                this.repo.provider
+                this.repo.ownerName
+                this.repo.vcsName
                 this.repo.defaultBranch.lastBuild.id
               }}
               @title="Last build on the default branch"
@@ -74,8 +82,9 @@
             <LinkTo
               @route="build"
               @models={{array
-                this.repo.owner.login
-                this.repo.name
+                this.repo.provider
+                this.repo.ownerName
+                this.repo.vcsName
                 this.repo.currentBuild.id
               }}
               @title="Last build on the repo"
@@ -94,7 +103,7 @@
           <div class="row-content row-item commit-sha">
             <SvgImage @name="icon-commit" @class="icon" />
             <ExternalLinkTo @href={{this.repo.currentBuild.commit.url}}>
-              <EmberTooltip @text="View commit on GitHub" />
+              <EmberTooltip @text="{{concat "View commit on " (vcs-name this.repo.vcsType)}}" />
               <span class="label-align monospace">
                 {{format-sha this.repo.currentBuild.commit.sha}}
               </span>
@@ -131,17 +140,31 @@
                 <SvgImage @name="icon-tofuburger" @class="icon-tofu" />
                 </button>
                 <ul class="dropup-list">
-                  <li>
-                    <button
-                      title="Trigger a build on the default branch"
-                      onclick={{action "triggerBuild"}}
-                    >
-                      <SvgImage @name="icon-restart" @class="icon" />
-                      <span class="label-align">
-                        Trigger a build
-                      </span>
-                    </button>
-                  </li>
+                  {{#if (and this.canOwnerBuild (not this.ownerRoMode))}}
+                    <li>
+                      <button
+                        title="Trigger a build on the default branch"
+                        onclick={{action "triggerBuild"}}
+                      >
+                        <SvgImage @name="icon-restart" @class="icon" />
+                        <span class="label-align">
+                          Trigger a build
+                        </span>
+                      </button>
+                    </li>
+                  {{else if this.ownerRoMode}}
+                    <li>
+                      <button
+                        title="Trigger a build on the default branch"
+                        disabled="disabled"
+                      >
+                        <SvgImage @name="icon-restart" @class="icon" />
+                        <span class="label-align">
+                          Trigger a build
+                        </span>
+                      </button>
+                    </li>
+                  {{/if}}
                   <li>
                     <LinkTo
                       @route="settings"
@@ -165,18 +188,29 @@
             There are no builds for this repo yet
           </p>
           {{#if this.isTriggering}}
-            <LoadingIndicator />
+            <LoadingIndicator @inline={{true}}/>
           {{else}}
-            <button
-              class="button--blue"
-              title="Trigger a build on the default branch"
-              onclick={{action "triggerBuild"}}
-            >
-              Trigger a build
-            </button>
+            {{#if (and this.canOwnerBuild (not this.ownerRoMode))}}
+              <button
+                class="button--blue"
+                title="Trigger a build on the default branch"
+                onclick={{action "triggerBuild"}}
+              >
+                Trigger a build
+              </button>
+            {{else if this.ownerRoMode}}
+              <button
+                class="button--blue"
+                title="Trigger a build on the default branch"
+                disabled="disabled"
+              >
+                Trigger a build
+              </button>
+            {{/if}}
           {{/if}}
         </div>
       {{/if}}
     {{/if}}
   </div>
 </div>
+</li>

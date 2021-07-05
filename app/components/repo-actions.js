@@ -1,7 +1,7 @@
 import Component from '@ember/component';
 import { inject as service } from '@ember/service';
 import { computed } from '@ember/object';
-import { alias, and, or } from '@ember/object/computed';
+import { alias, and, not, or, reads } from '@ember/object/computed';
 import eventually from 'travis/utils/eventually';
 import { task, taskGroup } from 'ember-concurrency';
 
@@ -35,7 +35,7 @@ export default Component.extend({
     }
   }),
 
-  userHasPermissionForRepo: computed('repo', 'user', 'user.permissions.[]', function () {
+  userHasPermissionForRepo: computed('repo.id', 'user', 'user.permissions.[]', function () {
     let repo = this.repo;
     let user = this.user;
     if (user && repo) {
@@ -43,7 +43,7 @@ export default Component.extend({
     }
   }),
 
-  userHasPullPermissionForRepo: computed('repo', 'user', 'user.pullPermissions.[]', function () {
+  userHasPullPermissionForRepo: computed('repo.id', 'user', 'user.pullPermissions.[]', function () {
     let repo = this.repo;
     let user = this.user;
     if (user && repo) {
@@ -51,7 +51,7 @@ export default Component.extend({
     }
   }),
 
-  userHasPushPermissionForRepo: computed('repo', 'user', 'user.pushPermissions.[]', function () {
+  userHasPushPermissionForRepo: computed('repo.id', 'user', 'user.pushPermissions.[]', function () {
     let repo = this.repo;
     let user = this.user;
     if (user && repo) {
@@ -59,10 +59,20 @@ export default Component.extend({
     }
   }),
 
+  canOwnerBuild: reads('repo.canOwnerBuild'),
+  ownerRoMode: reads('repo.owner.ro_mode'),
+  userRoMode: reads('user.roMode'),
+
+  showPriority: true,
+  showPrioritizeBuildModal: false,
   canCancel: and('userHasPullPermissionForRepo', 'item.canCancel'),
   canRestart: and('userHasPullPermissionForRepo', 'item.canRestart'),
   canDebug: and('userHasPushPermissionForRepo', 'item.canDebug'),
-
+  isHighPriority: or('item.priority', 'item.build.priority'),
+  isNotAlreadyHighPriority: not('isHighPriority'),
+  hasPrioritizePermission: or('item.permissions.prioritize', 'item.build.permissions.prioritize'),
+  canPrioritize: and('item.notStarted', 'isNotAlreadyHighPriority', 'hasPrioritizePermission'),
+  insufficientPermissions: not('userHasPushPermissionForRepo'),
   tooltips: or('labelless', 'mobilelabels'),
 
   cancel: task(function* () {
@@ -78,6 +88,14 @@ export default Component.extend({
   }).drop(),
 
   restarters: taskGroup().drop(),
+
+  closePriorityModal: function () {
+    this.set('showPrioritizeBuildModal', false);
+  },
+
+  showPriorityModal: function () {
+    this.set('showPrioritizeBuildModal', true);
+  },
 
   restart: task(function* () {
     let type = this.type;

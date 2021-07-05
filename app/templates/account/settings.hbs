@@ -2,6 +2,20 @@
   {{#if this.scrollToAuth}}
     <ScrollHere />
   {{/if}}
+  {{#unless this.userConfirmedAt}}
+    <section>
+      <h3>
+        Confirm account
+      </h3>
+      <button class={{this.confirmationButtonClass}} {{action 'sendConfirmationEmail'}} >SEND CONFIRMATION TOKEN AGAIN</button>
+      {{#if this.userHasNoEmails}}
+      <div>
+        We don’t have your email address.
+        Please update your email at your Version Control System provider, run Sync Account and try again..
+      </div>
+      {{/if}}
+    </section>
+  {{/unless}}
   <section>
     <h3>
       API authentication
@@ -12,7 +26,20 @@
         developer.travis-ci.com
       </ExternalLinkTo>.
     </p>
-    <AccountToken @account={{this.model}} />
+    <AccountToken @token={{this.auth.token}}/>
+  </section>
+  <section>
+    <h3>
+      Assets authentication
+    </h3>
+    <p>
+      Assets tokens could be used for embedding status images or getting atom and RSS feeds.
+      To learn more about using our Asset tokens, please head to
+      <ExternalLinkTo href="https://docs.travis-ci.com/user/status-images">
+        docs
+      </ExternalLinkTo>.
+    </p>
+    <AccountToken @token={{this.auth.assetToken}}/>
   </section>
   {{#if this.features.betaFeatures}}
     {{#if this.scrollToFeatures}}
@@ -69,7 +96,7 @@
           {{#each this.unsubscribedRepos as |repo|}}
             <div class="row" data-test-email-settings-resubscribe-item>
               <div class="name">
-                <LinkTo @route="repo" @model={{repo}}>
+                <LinkTo @route="repo" @models={{array repo.provider repo.urlOwnerName repo.urlName}}>
                   {{repo.formattedSlug}}
                 </LinkTo>
               </div>
@@ -111,7 +138,7 @@
           Make more informed decisions about your development workflow using your build Insights. <br />
           <LinkTo
             @route="owner.repositories"
-            @model={{this.account.login}}
+            @models={{array this.account.provider this.account.login}}
             @query={{hash tab="insights"}}
           >
             View {{this.account.fullName}}'s Insights

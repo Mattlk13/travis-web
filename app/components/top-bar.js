@@ -16,10 +16,17 @@ export default Component.extend(InViewportMixin, {
 
   tagName: 'header',
   classNames: ['top'],
+  classNameBindings: ['isWhite:top--white'],
+  isWhite: false,
   landingPage: false,
-  isOpen: reads('is-open'),
+  isNavigationOpen: false,
 
   user: reads('auth.currentUser'),
+  isUnconfirmed: computed('user.confirmedAt', function () {
+    if (!this.user)
+      return false;
+    return !this.user.confirmedAt;
+  }),
 
   userName: computed('user.{login,name}', function () {
     let login = this.get('user.login');
@@ -46,7 +53,8 @@ export default Component.extend(InViewportMixin, {
     });
     this._super(...arguments);
     scheduleOnce('afterRender', this, () => {
-      set(this, 'viewportTolerance.top', this.$().height());
+      const { clientHeight = 76 } = this.element;
+      set(this, 'viewportTolerance.top', clientHeight);
     });
   },
 
@@ -57,4 +65,10 @@ export default Component.extend(InViewportMixin, {
   didExitViewport() {
     this.flashes.set('topBarVisible', false);
   },
+
+  actions: {
+    toggleNavigation() {
+      this.toggleProperty('isNavigationOpen');
+    }
+  }
 });

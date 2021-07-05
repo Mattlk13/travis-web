@@ -5,11 +5,11 @@ import {
   render,
   click,
   fillIn,
-  triggerEvent
+  triggerEvent,
+  waitFor
 } from '@ember/test-helpers';
 import hbs from 'htmlbars-inline-precompile';
 import DS from 'ember-data';
-import { percySnapshot } from 'ember-percy';
 
 module('Integration | Component | add ssh-key', function (hooks) {
   setupRenderingTest(hooks);
@@ -38,13 +38,12 @@ module('Integration | Component | add ssh-key', function (hooks) {
     fillIn('.ssh-description', 'FOO');
     fillIn('.ssh-value', 'bar');
 
+    await waitFor('.form-footer .form-submit');
     await click('.form-submit');
 
     assert.equal(sshKey.get('description'), 'FOO', 'description should be set');
     assert.equal(sshKey.get('value'), 'bar', 'value should be set');
     assert.equal(sshKey.get('id'), 1, 'ssh key id should still be repo id');
-
-    percySnapshot(assert);
 
     var done = assert.async();
     done();
@@ -78,8 +77,6 @@ module('Integration | Component | add ssh-key', function (hooks) {
     await click('.form-submit');
 
     assert.dom('.form-error-message').exists('there is an error message if value is blank');
-
-    percySnapshot(assert);
 
     fillIn('.ssh-value', 'bar');
     await triggerEvent('.ssh-value', 'change');

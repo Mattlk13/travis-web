@@ -1,19 +1,23 @@
 import Component from '@ember/component';
 import { inject as service } from '@ember/service';
-import { alias } from '@ember/object/computed';
+import { alias, reads } from '@ember/object/computed';
 
 export default Component.extend({
   permissionsService: service('permissions'),
+  auth: service(),
   api: service(),
   flashes: service(),
 
-  tagName: 'li',
-  classNameBindings: ['repo.active:is-active'],
-  classNames: ['rows', 'rows--dashboard'],
+  tagName: '',
+
   isLoading: false,
   isTriggering: false,
   dropupIsOpen: false,
 
+  canOwnerBuild: reads('repo.canOwnerBuild'),
+  currentUser: alias('auth.currentUser'),
+  userRoMode: reads('currentUser.roMode'),
+  ownerRoMode: reads('repo.owner.ro_mode'),
   currentBuild: alias('repo.currentBuild'),
 
   displayMenuTofu: alias('repo.permissions.create_request'),
@@ -22,7 +26,7 @@ export default Component.extend({
     this.set('dropupIsOpen', true);
   },
 
-  mouseLeave() {
+  closeDropup() {
     this.set('dropupIsOpen', false);
   },
 

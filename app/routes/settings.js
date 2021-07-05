@@ -5,13 +5,15 @@ import config from 'travis/config/environment';
 import { inject as service } from '@ember/service';
 
 export default TravisRoute.extend({
-  ajax: service(),
   api: service(),
   auth: service(),
+  permissions: service(),
+  raven: service(),
+  flashes: service(),
 
   needsAuth: true,
 
-  setupController: function (controller, model) {
+  setupController(controller, model) {
     this._super(...arguments);
     controller.set('repo', this.modelFor('repo'));
     this.controllerFor('repo').activate('settings');
@@ -21,23 +23,6 @@ export default TravisRoute.extend({
   fetchEnvVars() {
     const repo = this.modelFor('repo');
     return repo.get('envVars.promise');
-  },
-
-  fetchCronJobs() {
-    const repo = this.modelFor('repo');
-    const canCreateCron = repo.get('permissions.create_cron');
-
-    if (canCreateCron) {
-      return EmberObject.create({
-        enabled: true,
-        jobs: repo.get('cronJobs')
-      });
-    } else {
-      return EmberObject.create({
-        enabled: false,
-        jobs: []
-      });
-    }
   },
 
   fetchCustomSshKey() {
@@ -59,11 +44,16 @@ export default TravisRoute.extend({
     if (config.endpoints.sshKey) {
       const repo = this.modelFor('repo');
       const url = `/repos/${repo.get('id')}/key`;
-      return this.ajax.get(url, (data) => {
+      return this.api.get(url, { travisApiVersion: null }).then((data) => {
         const fingerprint = EmberObject.create({
           fingerprint: data.fingerprint
         });
         return fingerprint;
+      }).catch(e => {
+        // 404s happen regularly and are unremarkable
+        if (e.status !== 404) {
+          this.raven.logException(e);
+        }
       });
     }
   },
@@ -73,23 +63,25 @@ export default TravisRoute.extend({
     return this.api.get(`/repo/${repoId}`).then(response => response.active);
   },
 
-  hasPushAccess() {
-    const repoId = parseInt(this.modelFor('repo').get('id'));
-    return this.get('auth.currentUser').get('pushPermissionsPromise').then((permissions) => {
-      const hasPushAccess = permissions.filter(p => p === repoId);
-      return hasPushAccess;
-    });
+  beforeModel() {
+    const repo = this.modelFor('repo');
+    const hasPushPermission = this.permissions.hasPushPermission(repo);
+    if (!hasPushPermission) {
+      this.transitionTo('repo.index');
+      this.flashes.error('Your permissions are insufficient to access this repository\'s settings');
+    }
   },
 
   model() {
+    const repo = this.modelFor('repo');
+
     return hash({
-      settings: this.modelFor('repo').fetchSettings(),
-      repository: this.modelFor('repo'),
+      settings: repo.fetchSettings.perform(),
+      repository: repo,
       envVars: this.fetchEnvVars(),
-      cronJobs: this.fetchCronJobs(),
       sshKey: this.fetchSshKey(),
       customSshKey: this.fetchCustomSshKey(),
-      hasPushAccess: this.hasPushAccess(),
+      hasPushAccess: this.permissions.hasPushPermission(repo),
       repositoryActive: this.fetchRepositoryActiveFlag()
     });
   }

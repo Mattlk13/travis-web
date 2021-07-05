@@ -88,27 +88,35 @@
         </li>
         {{#if this.features.proVersion}}
           <li>
-            <ExternalLinkTo
+            <LinkTo
               data-test-footer-plans-link="true"
-              @href={{this.config.urls.plans}}
+              @route='plans'
               @title="Travis CI Plans"
             >
               Plans and Pricing
-            </ExternalLinkTo>
+            </LinkTo>
           </li>
         {{/if}}
+        <li>
+          <ExternalLinkTo
+            data-test-footer-travis-vs-jenkins-link="true"
+            @href={{this.config.urls.travisVsJenkins}}
+            @title="Travis CI vs Jenkins"
+          >
+            Travis CI vs Jenkins
+          </ExternalLinkTo>
+        </li>
       {{/unless}}
     </ul>
   </div>
   {{#unless this.features.enterpriseVersion}}
     <div class="footer-elem">
       <h3 class="footer-title">
-        Legal
+        Company
       </h3>
       <ul>
         <li>
           <ExternalLinkTo
-            data-test-footer-imprint-link="true"
             @href={{this.config.urls.imprint}}
             @title="Imprint"
           >
@@ -117,27 +125,10 @@
         </li>
         <li>
           <ExternalLinkTo
-            data-test-footer-tos-link=""
-            @href={{this.config.urls.terms}}
-            @title="Terms of Service"
+            @href={{this.config.urls.legal}}
+            @title="Legal"
           >
-            Terms of Service
-          </ExternalLinkTo>
-        </li>
-        <li>
-          <ExternalLinkTo
-            @href={{this.config.urls.privacy}}
-          >
-            Privacy Policy
-          </ExternalLinkTo>
-        </li>
-        <li>
-          <ExternalLinkTo
-            data-test-footer-security-link="true"
-            @href={{this.config.urls.security}}
-            @title="Security Statement"
-          >
-            Security Statement
+            Legal
           </ExternalLinkTo>
         </li>
       </ul>

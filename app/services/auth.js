@@ -1,256 +1,279 @@
 /* global Travis */
-import { get, observer, computed } from '@ember/object';
-
-import { isEmpty } from '@ember/utils';
-import { Promise as EmberPromise } from 'rsvp';
+import URL from 'url';
+import {
+  computed,
+  get,
+  getProperties,
+  observer
+} from '@ember/object';
+import { assert } from '@ember/debug';
+import { isEmpty, isPresent } from '@ember/utils';
 import Service, { inject as service } from '@ember/service';
-import config from 'travis/config/environment';
-import { alias } from '@ember/object/computed';
+import {
+  equal,
+  or,
+  reads
+} from '@ember/object/computed';
 import { getOwner } from '@ember/application';
+import config from 'travis/config/environment';
+import { task } from 'ember-concurrency';
+import { availableProviders, vcsConfigByUrlPrefixOrType } from 'travis/utils/vcs';
 
-import URLPolyfill from 'travis/utils/url';
-
-const proVersion = config.featureFlags['pro-version'];
+const { authEndpoint, apiEndpoint } = config;
 
 // Collects the list of includes from all requests
 // and ensures the future fetches don't override previously loaded includes
-let includes = [];
+let includes = ['owner.installation', 'user.emails'];
+
+const afterSignOutCallbacks = [];
+
+const STATE = {
+  SIGNED_OUT: 'signed-out',
+  SIGNED_IN: 'signed-in',
+  SIGNING_IN: 'signing-in'
+};
+
+const USER_FIELDS = ['id', 'login', 'token', 'correct_scopes', 'channels', 'vcs_type', 'confirmed_at'];
+
+const TOKEN_EXPIRED_MSG = "You've been signed out, because your access token has expired.";
 
 export default Service.extend({
+  api: service(),
   router: service(),
   flashes: service(),
   intercom: service(),
   store: service(),
-  storage: service(),
+  localStorage: service('storage'),
   sessionStorage: service(),
-  ajax: service(),
+  features: service(),
+  metrics: service(),
+  utm: service(),
+  permissionsService: service('permissions'),
 
-  state: 'signed-out',
-  receivingEnd: `${location.protocol}//${location.host}`,
-  tokenExpiredMsg: 'You\'ve been signed out, because your access token has expired.',
+  state: STATE.SIGNED_OUT,
 
-  init() {
-    this.afterSignOutCallbacks = [];
-    return this._super(...arguments);
-  },
+  signedIn: equal('state', STATE.SIGNED_IN),
+  signedOut: equal('state', STATE.SIGNED_OUT),
+  signingIn: equal('state', STATE.SIGNING_IN),
 
-  token: computed(function () {
-    return this.sessionStorage.getItem('travis.token');
+  isProVersion: reads('features.proVersion'),
+
+  storage: reads('localStorage.auth'),
+
+  accounts: reads('storage.accounts'),
+
+  inactiveAccounts: computed('accounts.@each.id', 'storage.activeAccount.id', function () {
+    const { accounts, activeAccount } = this.storage;
+    if (accounts && accounts.length > 0 && activeAccount) {
+      return accounts.filter(account => account.id !== activeAccount.id);
+    } else {
+      return [];
+    }
   }),
 
-  assetToken() {
-    return JSON.parse(this.sessionStorage.getItem('travis.user'))['token'];
+  currentUser: reads('storage.activeAccount'),
+
+  permissions: reads('currentUser.permissions'),
+
+  token: or('currentUser.authToken', 'storage.token'),
+  assetToken: reads('currentUser.token'),
+
+  userName: reads('currentUser.fullName'),
+  gravatarUrl: reads('currentUser.gravatarUrl'),
+
+  redirectUrl: null,
+
+  init() {
+    this._super(...arguments);
+    window.addEventListener('focus', () => this.checkAuth());
   },
 
-  endpoint: config.authEndpoint || config.apiEndpoint,
+  checkAuth() {
+    if (!this.currentUser || !this.storage)
+      return;
+    const { accounts } = this.storage;
+    const { vcsId } = this.currentUser;
+    const stillLoggedIn = accounts.isAny('vcsId', vcsId);
 
-  signOut() {
-    this.sessionStorage.clear();
-    this.storage.clear();
-    this.set('state', 'signed-out');
-    this.set('user', null);
-    this.set('currentUser', null);
-    this.clearNonAuthFlashes();
-    this.runAfterSignOutCallbacks();
+    if (!stillLoggedIn) {
+      this.router.transitionTo('signin');
+    }
+  },
+
+  switchAccount(id, redirectUrl) {
     this.store.unloadAll();
+    const targetAccount = this.accounts.findBy('id', id);
+    this.storage.set('activeAccount', targetAccount);
+    if (redirectUrl)
+      window.location.href = redirectUrl;
+    else
+      window.location.reload();
   },
 
-  signIn(data, options = {}) {
-    if (data) {
-      this.autoSignIn(data);
-    } else {
-      this.set('state', 'signing-in');
+  signOut(runTeardown = true) {
+    if (this.signedIn) this.api.get('/logout');
 
-      let uri = options.redirectUri || window.location.href,
-        url = new URLPolyfill(uri);
+    [this.localStorage, this.sessionStorage].forEach(storage => {
+      storage.clearPreferencesData();
+    });
 
-      if (url.pathname === '/plans') {
-        url.pathname = '/';
-      }
+    this.set('state', STATE.SIGNED_OUT);
 
-      window.location = `${this.endpoint}/auth/handshake?redirect_uri=${url}`;
+    const { accounts, activeAccount } = this.storage;
+    accounts.removeObject(activeAccount);
+    this.storage.setProperties({ accounts, activeAccount: null });
+
+    if (runTeardown) {
+      this.clearNonAuthFlashes();
+      runAfterSignOutCallbacks();
     }
-  },
+    this.store.unloadAll();
 
-  autoSignIn(data) {
-    if (!data) {
-      data = this.userDataFrom(this.sessionStorage) ||
-             this.userDataFrom(this.storage);
-    }
-
-    if (data) {
-      this.setData(data);
-      this.refreshUserData().then(() => {
-      }, (xhr) => {
-        // if xhr is not defined it means that scopes are not correct,
-        // so log the user out. Also log the user out if the response is 401
-        // or 403
-        if (!xhr || (xhr.status === 401 || xhr.status === 403)) {
-          this.flashes.error(this.tokenExpiredMsg);
-          this.signOut();
-        }
-      });
+    const { currentRouteName } = this.router;
+    if (currentRouteName && currentRouteName !== 'signin') {
+      try {
+        this.router.transitionTo('signin');
+      } catch (e) {}
     }
   },
 
   afterSignOut(callback) {
-    this.afterSignOutCallbacks.push(callback);
+    afterSignOutCallbacks.push(callback);
   },
 
-  runAfterSignOutCallbacks() {
-    this.afterSignOutCallbacks.forEach((callback) => {
-      callback();
+  signInWith(provider) {
+    assert(`Invalid provider to authenticate ${provider}`, availableProviders.includes(provider));
+    this.signIn(provider);
+  },
+
+  signIn(provider) {
+    this.set('state', STATE.SIGNING_IN);
+
+    const url = new URL(this.redirectUrl || window.location.href);
+
+    if (['/signin', '/plans', '/integration/bitbucket'].includes(url.pathname)) {
+      url.pathname = '/';
+    }
+    const providerSegment = provider ? `/${provider}` : '';
+    const path = `/auth/handshake${providerSegment}`;
+    window.location.href = `${authEndpoint || apiEndpoint}${path}?redirect_uri=${url}`;
+  },
+
+  getAccountByProvider(provider) {
+    const { vcsTypes } = vcsConfigByUrlPrefixOrType(provider);
+    const [,, userType] = vcsTypes;
+    return this.accounts.findBy('vcsType', userType);
+  },
+
+  isSignedInWith(provider) {
+    return !!this.getAccountByProvider(provider);
+  },
+
+  autoSignIn() {
+    this.set('state', STATE.SIGNING_IN);
+    try {
+      const promise = this.storage.user ? this.handleNewLogin() : this.reloadCurrentUser();
+      return promise
+        .then(() => this.permissionsService.fetchPermissions.perform())
+        .then(() => {
+          const { currentUser } = this;
+          this.set('state', STATE.SIGNED_IN);
+          Travis.trigger('user:signed_in', currentUser);
+          Travis.trigger('user:refreshed', currentUser);
+        })
+        .catch(error => {
+          throw new Error(error);
+        });
+    } catch (error) {
+      this.signOut(false);
+    }
+  },
+
+  handleNewLogin() {
+    const { storage } = this;
+    const { user, token, isBecome } = storage;
+
+    storage.clearLoginData();
+
+    if (!user || !token) throw new Error('No login data');
+
+    const userData = getProperties(user, USER_FIELDS);
+    this.validateUserData(userData, isBecome);
+
+    const userRecord = pushUserToStore(this.store, userData);
+    userRecord.set('authToken', token);
+
+    return this.reloadUser(userRecord).then(() => {
+      storage.accounts.addObject(userRecord);
+      storage.set('activeAccount', userRecord);
+      this.reportNewUser();
+      this.reportToIntercom();
     });
   },
 
-  userDataFrom(storage) {
-    let token, user, userJSON;
-    userJSON = storage.getItem('travis.user');
-    if (userJSON != null) {
-      user = JSON.parse(userJSON);
-    }
-    if (user != null ? user.user : void 0) {
-      user = user.user;
-    }
-    token = storage.getItem('travis.token');
-    if (user && token && this.validateUser(user)) {
-      return {
-        user,
-        token
-      };
-    } else {
-      storage.removeItem('travis.user');
-      storage.removeItem('travis.token');
-      return null;
-    }
+  reloadCurrentUser(include = []) {
+    if (!this.currentUser) throw new Error('No active account');
+    return this.reloadUser(this.currentUser, include);
   },
 
-  validateUser(user) {
-    let fieldsToValidate, isTravisBecome;
-    fieldsToValidate = ['id', 'login', 'token'];
-    isTravisBecome = this.sessionStorage.getItem('travis.become');
-    if (!isTravisBecome) {
-      fieldsToValidate.push('correct_scopes');
-    }
-    if (this.get('features.proVersion')) {
-      fieldsToValidate.push('channels');
-    }
-    return fieldsToValidate.every(field => this.validateHas(field, user)) &&
-      (isTravisBecome || user.correct_scopes);
+  reloadUser(userRecord, include = []) {
+    includes = includes.concat(include).uniq();
+    return this.fetchUser.perform(userRecord);
   },
 
-  validateHas(field, user) {
-    if (user[field]) {
-      return true;
-    } else {
-      return false;
-    }
-  },
-
-  setData(data) {
-    let user;
-    this.storeData(data, this.sessionStorage);
-    if (!this.userDataFrom(this.storage)) {
-      this.storeData(data, this.storage);
-    }
-    user = this.loadUser(data.user);
-    this.set('currentUser', user);
-    this.set('state', 'signed-in');
-    this.userSignedIn(data.user);
-  },
-
-  userSignedIn(user) {
-    if (proVersion && get(config, 'intercom.enabled')) {
-      this.intercom.set('user.id', user.id);
-      this.intercom.set('user.name', user.name);
-      this.intercom.set('user.email', user.email);
-      this.intercom.set('user.createdAt', user.first_logged_in_at);
-      this.intercom.set('user.hash', user.secure_user_hash);
-    }
-    Travis.trigger('user:signed_in', user);
-  },
-
-  refreshUserData(user, include = []) {
-    includes = includes.concat(include, ['owner.installation']).uniq();
-    if (!user) {
-      let data = this.userDataFrom(this.sessionStorage) ||
-                 this.userDataFrom(this.storage);
-      if (data) {
-        user = data.user;
+  fetchUser: task(function* (userRecord) {
+    try {
+      return yield userRecord.reload({ included: includes.join(',') });
+    } catch (error) {
+      const status = +error.status || +get(error, 'errors.firstObject.status');
+      if (status === 401 || status === 403 || status === 500) {
+        this.flashes.error(TOKEN_EXPIRED_MSG);
+        this.signOut();
       }
     }
-    if (user) {
-      return this.ajax.get(`/users/${user.id}`)
-        .then(data => {
-          let userRecord;
-          if (data.user.correct_scopes) {
-            userRecord = this.loadUser(data.user);
-            userRecord.get('permissions');
-            if (this.signedIn) {
-              data.user.token = user.token;
-              this.storeData(data, this.sessionStorage);
-              this.storeData(data, this.storage);
-              Travis.trigger('user:refreshed', data.user);
-            }
-            return this.store.queryRecord('user', {
-              current: true,
-              included: includes.join(',')
-            });
-          } else {
-            return EmberPromise.reject();
-          }
-        })
-        .then(({ installation = null }) => {
-          this.currentUser.setProperties({ installation });
+  }).keepLatest(),
+
+  validateUserData(user, isBecome) {
+    const hasChannelsOnPro = field => field === 'channels' && !this.isProVersion;
+    user['confirmed_at'] = user['confirmed_at'] || false;
+    const hasAllFields = USER_FIELDS.every(field => isPresent(user[field]) || hasChannelsOnPro(field));
+    const hasCorrectScopes = user.correct_scopes || isBecome;
+    if (!hasAllFields || !hasCorrectScopes) {
+      throw new Error('User validation failed');
+    }
+  },
+
+  reportToIntercom() {
+    const {
+      id,
+      name,
+      emails,
+      email: userEmail,
+      firstLoggedInAt: createdAt,
+      secureUserHash: userHash,
+      vcsProvider = {}
+    } = this.currentUser;
+    const email = userEmail || emails && emails.firstObject;
+    this.intercom.set('user', { id, name, email, createdAt, userHash, provider: vcsProvider.name });
+  },
+
+  reportNewUser() {
+    const { currentUser, metrics } = this;
+    const { recentlySignedUp, vcsProvider } = currentUser;
+
+    if (recentlySignedUp) {
+      metrics.trackEvent({
+        event: 'first_authentication'
+      });
+      if (vcsProvider) {
+        metrics.trackEvent({
+          event: 'first_authentication_with_provider',
+          authProvider: vcsProvider.name
         });
-    } else {
-      return EmberPromise.resolve();
-    }
-  },
-
-  signedIn: computed('state', function () {
-    let state = this.state;
-    return state === 'signed-in';
-  }),
-
-  signedOut: computed('state', function () {
-    let state = this.state;
-    return state === 'signed-out';
-  }),
-
-  signingIn: computed('state', function () {
-    let state = this.state;
-    return state === 'signing-in';
-  }),
-
-  storeData(data, storage) {
-    if (data.token) {
-      storage.setItem('travis.token', data.token);
-    }
-    return storage.setItem('travis.user', JSON.stringify(data.user));
-  },
-
-  loadUser(user) {
-    let store = this.store,
-      userClass = store.modelFor('user'),
-      serializer = store.serializerFor('user'),
-      normalized = serializer.normalizeResponse(store, userClass, user, null, 'findRecord');
-
-    store.push(normalized);
-    const record =  store.recordForId('user', user.id);
-    const installation = store.peekAll('installation').findBy('owner.id', user.id) || null;
-    record.setProperties({ installation });
-    return record;
-  },
-
-  expectedOrigin() {
-    let endpoint = this.endpoint;
-    if (endpoint && endpoint[0] === '/') {
-      return this.receivingEnd;
-    } else {
-      let matches = endpoint.match(/^https?:\/\/[^\/]*/);
-      if (matches && matches.length) {
-        return matches[0];
+      }
+      if (this.utm.hasData) {
+        currentUser.set('utmParams', this.utm.all);
+        currentUser.save();
       }
     }
   },
@@ -260,7 +283,7 @@ export default Service.extend({
     const errorMessages = flashMessages.filterBy('type', 'error');
     if (!isEmpty(errorMessages)) {
       const errMsg = errorMessages.get('firstObject.message');
-      if (errMsg !== this.tokenExpiredMsg) {
+      if (errMsg !== TOKEN_EXPIRED_MSG) {
         return this.flashes.clear();
       }
     } else {
@@ -279,20 +302,12 @@ export default Service.extend({
     }
   }),
 
-  userName: computed('currentUser.{login,name}', function () {
-    let login = this.get('currentUser.login');
-    let name = this.get('currentUser.name');
-    return name || login;
-  }),
-
-  gravatarUrl: computed('currentUser.gravatarId', function () {
-    let gravatarId = this.get('currentUser.gravatarId');
-    return `${location.protocol}//www.gravatar.com/avatar/${gravatarId}?s=48&d=mm`;
-  }),
-
-  permissions: alias('currentUser.permissions'),
-
   actions: {
+
+    switchAccount(id) {
+      this.switchAccount(id);
+    },
+
     signIn(runAfterSignIn) {
       let applicationRoute = getOwner(this).lookup('route:application');
       applicationRoute.send('signIn', runAfterSignIn);
@@ -303,3 +318,15 @@ export default Service.extend({
     }
   }
 });
+
+function pushUserToStore(store, user) {
+  const record = store.push(store.normalize('user', user));
+  const installation = store.peekAll('installation').findBy('owner.id', user.id) || null;
+  record.setProperties({ installation });
+  return record;
+}
+
+function runAfterSignOutCallbacks() {
+  afterSignOutCallbacks.forEach(callback => callback());
+  afterSignOutCallbacks.clear();
+}

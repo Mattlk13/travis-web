@@ -3,24 +3,26 @@ import { setupApplicationTest } from 'travis/tests/helpers/setup-application-tes
 import buildPage from 'travis/tests/pages/build';
 import topPage from 'travis/tests/pages/top';
 import signInUser from 'travis/tests/helpers/sign-in-user';
+import { setupMirage } from 'ember-cli-mirage/test-support';
 
 module('Acceptance | builds/restart', function (hooks) {
   setupApplicationTest(hooks);
-
-  hooks.beforeEach(function () {
-    const currentUser = server.create('user');
-    signInUser(currentUser);
-  });
+  setupMirage(hooks);
 
   test('restarting build', async function (assert) {
-    let repository =  server.create('repository');
-    server.create('branch', {});
+    const currentUser = this.server.create('user', {login: 'travis-ci', confirmed_at: Date.now()});
+    this.server.create('allowance', {subscription_type: 1});
+    signInUser(currentUser);
 
-    let  gitUser = server.create('git-user', { name: 'Mr T' });
-    let commit = server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
-    let build = server.create('build', { number: '5', repository, state: 'passed', commit });
-    let job = server.create('job', { number: '1234.1', repository, state: 'passed', build, commit });
-    server.create('log', { id: job.id });
+    let repository =  this.server.create('repository', { slug: 'travis-ci/travis-web', owner: { login: 'travis-ci', id: 1} });
+
+    this.server.create('branch', {});
+
+    let gitUser = this.server.create('git-user', { name: 'Mr T' });
+    let commit = this.server.create('commit', { author: gitUser, committer: gitUser, branch: 'acceptance-tests', message: 'This is a message', branch_is_default: true });
+    let build = this.server.create('build', { number: '5', repository, state: 'passed', commit });
+    let job = this.server.create('job', { number: '1234.1', repository, state: 'passed', build, commit });
+    this.server.create('log', { id: job.id });
 
     await buildPage
       .visit({ owner: 'travis-ci', repo: 'travis-web', build_id: build.id })

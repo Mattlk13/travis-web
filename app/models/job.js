@@ -3,25 +3,43 @@
 import Model, { attr, belongsTo } from '@ember-data/model';
 import { observer, computed } from '@ember/object';
 import { alias, and, equal, not, reads } from '@ember/object/computed';
-import { on } from '@ember/object/evented';
 import { inject as service } from '@ember/service';
 import { isEqual } from '@ember/utils';
 import { getOwner } from '@ember/application';
-import { Promise as EmberPromise } from 'rsvp';
 import Log from 'travis/models/log';
 import DurationCalculations from 'travis/mixins/duration-calculations';
 import DurationAttributes from 'travis/mixins/duration-attributes';
 import promiseObject from 'travis/utils/promise-object';
 
+export const OSX_VERSIONS = {
+  'xcode11.3': '10.14',
+  'xcode11.2': '10.14',
+  'xcode11.1': '10.14',
+  'xcode11': '10.14',
+  'xcode10.3': '10.14.4',
+  'xcode10.2': '10.14',
+  'xcode10.1': '10.13',
+  'xcode10': '10.13',
+  'xcode9.4': '10.13',
+  'xcode9.3': '10.13',
+  'xcode9.2': '10.12',
+  'xcode9.1': '10.12',
+  'xcode9': '10.12',
+  'xcode8.3': '10.12',
+  'xcode8': '10.11',
+  'xcode7.3': '10.11',
+  'xcode6.4': '10.10',
+};
+
 export default Model.extend(DurationCalculations, DurationAttributes, {
   api: service(),
-  ajax: service(),
   jobConfigFetcher: service(),
   features: service(),
   logId: attr(),
   queue: attr(),
   state: attr(),
   number: attr(),
+  jobIdNumber: attr(),
   allowFailure: attr('boolean'),
   tags: attr(),
   repositoryPrivate: attr(),
@@ -43,6 +61,10 @@ export default Model.extend(DurationCalculations, DurationAttributes, {
   tag: alias('build.tag'),
   eventType: alias('build.eventType'),
 
+  jobNumber: computed('number', 'jobIdNumber', function () {
+    return this.jobIdNumber ? this.jobIdNumber : this.number;
+  }),
+
   // TODO: DO NOT SET OTHER PROPERTIES WITHIN A COMPUTED PROPERTY!
   log: computed(function () {
     this.set('isLogAccessed', true);
@@ -58,6 +80,34 @@ export default Model.extend(DurationCalculations, DurationAttributes, {
   }),
 
   isConfigLoaded: reads('config.isFulfilled'),
+
+  os: computed('config.content.os', function () {
+    const os = this.get('config.content.os');
+
+    if (os === 'linux' || os === 'linux-ppc64le') {
+      return 'linux';
+    } else if (os === 'freebsd') {
+      return 'freebsd';
+    } else if (os === 'osx') {
+      return 'osx';
+    } else if (os === 'windows') {
+      return 'windows';
+    } else {
+      return 'unknown';
+    }
+  }),
+
+  dist: reads('config.content.dist'),
+  osxImage: reads('config.content.osx_image'),
+
+  osVersion: computed('os', 'dist', 'osxImage', function () {
+    const { os, dist, osxImage } = this;
+    if (os === 'osx') {
+      return OSX_VERSIONS[osxImage];
+    } else {
+      return dist;
+    }
+  }),
 
   getCurrentState() {
     return this.get('currentState.stateName');
@@ -116,7 +166,7 @@ export default Model.extend(DurationCalculations, DurationAttributes, {
 
   removeLog() {
     const url = `/job/${this.id}/log`;
-    return this.ajax.deleteV3(url).then(() => this.reloadLog());
+    return this.api.delete(url).then(() => this.reloadLog());
   },
 
   reloadLog() {
@@ -138,39 +188,14 @@ export default Model.extend(DurationCalculations, DurationAttributes, {
     return this.log.append(part);
   },
 
-  whenLoaded(callback) {
-    new EmberPromise((resolve, reject) => {
-      this.whenLoadedCallbacks = this.whenLoadedCallbacks || [];
-      if (this.isLoaded) {
-        resolve();
-      } else {
-        this.whenLoadedCallbacks.push(resolve);
-      }
-    }).then(() => callback(this));
-  },
-
-  didLoad: on('didLoad', function () {
-    (this.whenLoadedCallbacks || []).forEach((callback) => {
-      callback(this);
-    });
-  }),
-
   subscribe() {
-    // TODO: this is needed only because we may reach this place with a job that
-    //       is not fully loaded yet. A better solution would be to ensure that
-    //       we call subscribe only when the job is loaded, but I think that
-    //       would require a bigger refactoring.
-    this.whenLoaded(() => {
-      if (this.subscribed) {
-        return;
-      }
+    if (this.subscribed) {
+      return;
+    }
 
-      this.set('subscribed', true);
+    this.set('subscribed', true);
 
-      this.repo.then((repo) =>
-        Travis.pusher.subscribe(this.channelName)
-      );
-    });
+    return this.repo.then(repo => Travis.pusher.subscribe(this.channelName));
   },
 
   channelName: computed(
@@ -191,16 +216,14 @@ export default Model.extend(DurationCalculations, DurationAttributes, {
   ),
 
   unsubscribe() {
-    this.whenLoaded(() => {
-      if (!this.subscribed) {
-        return;
-      }
-      this.set('subscribed', false);
-      if (Travis.pusher) {
-        const channel = `job-${this.id}`;
-        return Travis.pusher.unsubscribe(channel);
-      }
-    });
+    if (!this.subscribed) {
+      return;
+    }
+    this.set('subscribed', false);
+    if (Travis.pusher) {
+      const channel = `job-${this.id}`;
+      return Travis.pusher.unsubscribe(channel);
+    }
   },
 
   onStateChange: observer('state', function () {
@@ -216,4 +239,9 @@ export default Model.extend(DurationCalculations, DurationAttributes, {
     let number = this.number;
     return `${slug} #${number}`;
   }),
+
+  didLoad() {
+    if (this.number)
+      this.set('jobIdNumber', this.number);
+  }
 });

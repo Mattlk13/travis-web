@@ -1,6 +1,6 @@
 import { assign } from '@ember/polyfills';
 
-let configKeys, configKeysMap, languageConfigKeys;
+let configKeys, configKeysMap, languageConfigKeys, archConfigKeys;
 
 languageConfigKeys = {
   android: 'Android',
@@ -26,6 +26,7 @@ languageConfigKeys = {
   julia: 'Julia',
   lein: 'Lein',
   mono: 'Mono',
+  matlab: 'MATLAB',
   nix: 'Nix',
   node_js: 'Node.js',
   objective_c: 'Objective-C',
@@ -56,8 +57,13 @@ configKeys = {
   os: 'OS'
 };
 
+archConfigKeys = {
+  arm64: 'Arm64',
+  amd64: 'AMD64'
+};
+
 configKeysMap = assign(configKeys, languageConfigKeys);
 
 export default configKeysMap;
 
-export { languageConfigKeys, configKeys };
+export { languageConfigKeys, configKeys, archConfigKeys };

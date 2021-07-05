@@ -1,4 +1,3 @@
-import $ from 'jquery';
 import Component from '@ember/component';
 import config from 'travis/config/environment';
 import { inject as service } from '@ember/service';
@@ -7,6 +6,7 @@ import { alias } from '@ember/object/computed';
 import { task } from 'ember-concurrency';
 
 export default Component.extend({
+  api: service(),
   auth: service(),
   flashes: service(),
   permissions: service(),
@@ -50,7 +50,7 @@ export default Component.extend({
       let appName = this.get('config.githubApps.appName');
       let ownerGithubId = this.get('repo.owner.github_id');
       let repoGithubId = this.get('repo.githubId');
-      return 'https://github.com/apps/' +
+      return `${config.githubAppsEndpoint}/` +
         `${appName}/installations/new/permissions` +
         `?suggested_target_id=${ownerGithubId}` +
         `&repository_ids=${repoGithubId}`;
@@ -58,17 +58,10 @@ export default Component.extend({
   ),
 
   activate: task(function* () {
-    const apiEndpoint = config.apiEndpoint;
     const repoId = this.get('repo.id');
 
     try {
-      const response = yield $.ajax(`${apiEndpoint}/repo/${repoId}/activate`, {
-        headers: {
-          Authorization: `token ${this.get('auth.token')}`,
-          'Travis-API-Version': '3'
-        },
-        method: 'POST'
-      });
+      const response = yield this.api.post(`/repo/${repoId}/activate`);
 
       if (response.active) {
         this.pusher.subscribe(`repo-${repoId}`);

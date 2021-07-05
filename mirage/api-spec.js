@@ -499,6 +499,16 @@ export default {
 
             ]
           }
+        ],
+        "increasePriority": [
+          {
+            "@type": "template",
+            "request_method": "POST",
+            "uri_template": "/v3/build/{build.id}/priority?cancel_all",
+            "accepted_params": [
+
+            ]
+          }
         ]
       },
       "attributes": [
@@ -522,7 +532,8 @@ export default {
         "created_by",
         "updated_at",
         "request",
-        "yaml"
+        "yaml",
+        "priority"
       ],
       "representations": {
         "minimal": [
@@ -558,13 +569,15 @@ export default {
           "stages",
           "created_by",
           "updated_at",
-          "yaml"
+          "yaml",
+          "priority"
         ]
       },
       "permissions": [
         "read",
         "cancel",
-        "restart"
+        "restart",
+        "prioritize"
       ]
     },
     "builds": {
@@ -685,6 +698,15 @@ export default {
       "representations":  {
         "standard":       ["id", "card_owner", "expiration_date", "last_digits"],
         "minimal":        ["id", "card_owner", "expiration_date", "last_digits"],
+      }
+    },
+    "discount":                    {
+      "@type":            "resource",
+      "actions":          { },
+      "attributes":       ["id", "name", "percent_off", "amount_off", "valid", "duration", "duration_in_months"],
+      "representations":  {
+        "standard":       ["id", "name", "percent_off", "amount_off", "valid", "duration", "duration_in_months"],
+        "minimal":        ["id", "name", "percent_off", "amount_off", "valid", "duration", "duration_in_months"],
       }
     },
     "cron": {
@@ -1014,18 +1036,18 @@ export default {
     "invoice":            {
       "@type":            "resource",
       "actions":          { },
-      "attributes":       ["id", "created_at", "url", "amount_due"],
+      "attributes":       ["id", "created_at", "status", "url", "amount_due"],
       "representations":  {
-        "standard":       ["id", "created_at", "url", "amount_due"],
-        "minimal":        ["id", "created_at", "url", "amount_due"],
+        "standard":       ["id", "created_at", "status", "url", "amount_due"],
+        "minimal":        ["id", "created_at", "status", "url", "amount_due"],
       }
     },
     "invoices": {
       "@type": "resource",
-      "attributes":       ["id", "created_at", "url", "amount_due"],
+      "attributes":       ["id", "created_at", "status", "url", "amount_due"],
       "representations":  {
-        "standard":       ["id", "created_at", "url", "amount_due"],
-        "minimal":        ["id", "created_at", "url", "amount_due"],
+        "standard":       ["id", "created_at", "status", "url", "amount_due"],
+        "minimal":        ["id", "created_at", "status", "url", "amount_due"],
       }
     },
     "job": {
@@ -1364,7 +1386,9 @@ export default {
         "level",
         "key",
         "code",
-        "args"
+        "args",
+        "src",
+        "line"
       ],
       "representations": {
         "standard": [
@@ -1372,7 +1396,9 @@ export default {
           "level",
           "key",
           "code",
-          "args"
+          "args",
+          "src",
+          "line"
         ]
       }
     },
@@ -1537,6 +1563,15 @@ export default {
       "representations":  {
         "standard":       ["id", "name", "price", "currency", "builds", "annual"],
         "minimal":        ["id", "name", "price", "currency", "builds", "annual"],
+      }
+    },
+    "v2-plan-config":  {
+      "@type":            "resource",
+      "actions":          { },
+      "attributes":       ["id", "name", "private_repos", "starting_price", "starting_users", "private_credits", "public_credits", "addon_configs"],
+      "representations":  {
+        "standard":       ["id", "name", "private_repos", "starting_price", "starting_users", "private_credits", "public_credits", "addon_configs"],
+        "minimal":        ["id", "name", "private_repos", "starting_price", "starting_users", "private_credits", "public_credits", "addon_configs"],
       }
     },
     "preference": {
@@ -1758,6 +1793,7 @@ export default {
       "attributes": [
         "id",
         "name",
+        "vcs_name",
         "slug",
         "description",
         "github_id",
@@ -1765,6 +1801,7 @@ export default {
         "active",
         "private",
         "owner",
+        "owner_name",
         "default_branch",
         "starred",
         "managed_by_installation",
@@ -1785,6 +1822,7 @@ export default {
         "standard": [
           "id",
           "name",
+          "vcs_name",
           "slug",
           "description",
           "github_id",
@@ -1792,6 +1830,7 @@ export default {
           "active",
           "private",
           "owner",
+          "owner_name",
           "default_branch",
           "starred",
           "managed_by_installation",
@@ -2072,9 +2111,11 @@ export default {
         "plan",
         "billing_info",
         "credit_card_info",
+        "discount",
         "owner",
         "status",
         "valid_to",
+        "created_at",
         "source",
       ],
       "representations":  {
@@ -2083,9 +2124,11 @@ export default {
           "plan",
           "billing_info",
           "credit_card_info",
+          "discount",
           "owner",
           "status",
           "valid_to",
+          "created_at",
           "source"
         ],
         "minimal":       [
@@ -2093,7 +2136,36 @@ export default {
           "owner",
           "status",
           "valid_to",
+          "created_at",
           "source"
+        ],
+      },
+    },
+    "v2-subscription": {
+      "@type":            "resource",
+      "actions":          { },
+      "attributes":       [
+        "id",
+        "plan",
+        "addons",
+        "billing_info",
+        "credit_card_info",
+        "discount",
+        "owner",
+        "created_at",
+        "source",
+      ],
+      "representations":  {
+        "standard":       [
+          "id",
+          "plan",
+          "addons",
+          "billing_info",
+          "credit_card_info",
+          "discount",
+          "owner",
+          "created_at",
+          "source",
         ],
       },
     },
@@ -2165,7 +2237,11 @@ export default {
         "repositories",
         "installation",
         "is_syncing",
-        "synced_at"
+        "synced_at",
+        "recently_signed_up",
+        "vcs_type",
+        "vcs_id",
+        "allowance"
       ],
       "representations": {
         "minimal": [
@@ -2181,7 +2257,11 @@ export default {
           "education",
           "allow_migration",
           "is_syncing",
-          "synced_at"
+          "synced_at",
+          "recently_signed_up",
+          "vcs_type",
+          "vcs_id",
+          "allowance"
         ],
         "additional": [
           "repositories",

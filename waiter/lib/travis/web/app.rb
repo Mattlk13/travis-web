@@ -184,13 +184,25 @@ class Travis::Web::App
 
       config['featureFlags'] ||= {}
 
+      if options[:enable_feature_flags]
+        options[:enable_feature_flags].split(',').each do |flag|
+          config['featureFlags'][flag] = true
+        end
+      end
+
       if options[:pro]
         config['pro'] = true
         config['featureFlags']['pro-version'] = true
+        config['featureFlags']['github-apps'] = true
       end
       if options[:enterprise]
         config['enterprise'] = true
         config['featureFlags']['enterprise-version'] = true
+      end
+
+      if options[:github_apps_app_name]
+        config['githubApps'] ||= {}
+        config['githubApps']['appName'] = options[:github_apps_app_name]
       end
 
       if !options[:public_mode].nil? && (options[:public_mode] == 'false' || options[:public_mode] == false)
@@ -209,7 +221,12 @@ class Travis::Web::App
 
       config['defaultTitle'] = title
       config['apiEndpoint'] = options[:api_endpoint] if options[:api_endpoint]
-      config['sourceEndpoint'] = options[:source_endpoint] if options[:source_endpoint]
+      config['githubAppsEndpoint'] = options[:github_apps_endpoint]
+      source_endpoint = options[:source_endpoint]
+      if source_endpoint
+        config['sourceEndpoint'] = source_endpoint
+        config['githubAppsEndpoint'] = source_endpoint + '/github-apps' unless source_endpoint.include? 'github.com'
+      end
       pusher = {}
       pusher['key'] = options[:pusher_key] if options[:pusher_key]
       pusher['host'] = options[:pusher_host] if options[:pusher_host]
@@ -217,6 +234,13 @@ class Travis::Web::App
       pusher['channelPrefix'] = options[:pusher_channel_prefix] if options[:pusher_channel_prefix]
       pusher['encrypted'] = true
       config['pusher'] = pusher
+
+      if options[:stripe_publishable_key]
+        stripe = {}
+        stripe['publishableKey'] = options[:stripe_publishable_key]
+        stripe['lazyLoad'] = true
+        config['stripe'] = stripe
+      end
 
       config['gaCode'] = options[:ga_code] if options[:ga_code]
 
@@ -228,6 +252,13 @@ class Travis::Web::App
         'sshKey' => options[:ssh_key_enabled],
         'caches' => options[:caches_enabled]
       }
+
+      if options[:default_provider]
+        provider = options[:default_provider]
+        config['providers'] ||= {}
+        config['providers'][provider] ||= {}
+        config['providers'][provider]['isDefault'] = true
+      end
 
       regexp = %r(<meta name="travis/config/environment"\s+content="([^"]+)")
       string.gsub!(regexp) do

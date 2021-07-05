@@ -6,6 +6,8 @@ import { reads, equal, or } from '@ember/object/computed';
 import { Promise as EmberPromise, } from 'rsvp';
 import { task } from 'ember-concurrency';
 import ExpandableRecordArray from 'travis/utils/expandable-record-array';
+import { defaultVcsConfig } from 'travis/utils/vcs';
+import { isEmpty } from '@ember/utils';
 
 export const MIGRATION_STATUS = {
   QUEUED: 'queued',
@@ -22,6 +24,8 @@ export const HISTORY_MIGRATION_STATUS = {
 const Repo = VcsEntity.extend({
   api: service(),
   auth: service(),
+  features: service(),
+  store: service(),
 
   permissions: attr(),
   slug: attr('string'),
@@ -31,8 +35,11 @@ const Repo = VcsEntity.extend({
   githubLanguage: attr(),
   active: attr(),
   owner: attr(),
+  ownerName: attr('string'), // owner_name of repository normalized by provider
   name: attr('string'),
+  vcsName: attr('string'), // name of repository normalized by provider
   starred: attr('boolean'),
+  shared: attr('boolean'),
   active_on_org: attr('boolean'),
   emailSubscribed: attr('boolean'),
   migrationStatus: attr('string'),
@@ -62,6 +69,77 @@ const Repo = VcsEntity.extend({
     return hasPermissions && (!isMigrated || isFailed);
   }),
 
+  allowance: computed('owner.allowance', 'repoOwnerAllowance', function () {
+    if (this.owner.allowance)
+      return this.owner.allowance;
+    if (this.repoOwnerAllowance)
+      return this.repoOwnerAllowance;
+  }),
+
+  repoOwnerAllowance: reads('fetchRepoOwnerAllowance.lastSuccessful.value'),
+
+  fetchRepoOwnerAllowance: task(function* () {
+    const allowance = this.store.peekRecord('allowance', this.owner.id);
+    if (allowance)
+      return allowance;
+    return yield this.store.queryRecord('allowance', { login: this.owner.login, provider: this.provider });
+  }).drop(),
+
+  buildPermissions: reads('fetchBuildPermissions.lastSuccessful.value'),
+
+  fetchBuildPermissions: task(function* () {
+    const url = `/v3/repo/${this.id}/build_permissions`;
+    const result = yield this.api.get(url);
+    if (result && result.build_permissions) {
+      return result.build_permissions.map((perm) => {
+        perm.user.provider = perm.user.vcs_type.toLowerCase().replace('user', '');
+        if (!perm.user.name) {
+          perm.user.name = perm.user.login;
+        }
+        return perm;
+      });
+    }
+    return [];
+  }).keepLatest(),
+
+  changePermissions: task(function* (userIds, permission) {
+    const usersArray = Array.isArray(userIds) ? userIds : [userIds];
+    const url = `/v3/repo/${this.id}/build_permissions`;
+    const data = {
+      user_ids: usersArray,
+      permission: permission
+    };
+    yield this.api.patch(url, { data: data });
+  }).drop(),
+
+  canOwnerBuild: computed('auth.currentUser.confirmedAt', 'allowance', 'private', 'features.{proVersion,enterpriseVersion}', function () {
+    if (this.auth.currentUser && !this.auth.currentUser.confirmedAt)
+      return false;
+    const isPro = this.get('features.proVersion');
+    const enterprise = !!this.get('features.enterpriseVersion');
+    const roMode = this.get('owner').ro_mode || false;
+
+    if (!isPro || enterprise) {
+      return !roMode;
+    }
+
+    const allowance = this.allowance;
+    const isPrivate = this.private;
+
+    if (allowance && allowance.subscriptionType === 1)
+      return !roMode;
+    if (!allowance && !this.repoOwnerAllowance) {
+      return !roMode;
+    }
+    if (!allowance) {
+      return false;
+    }
+
+    const buildCredits = isPrivate ? allowance.privateRepos : allowance.publicRepos;
+
+    return buildCredits && allowance.userUsage && !roMode;
+  }),
+
   defaultBranch: belongsTo('branch', { async: false }),
   currentBuild: belongsTo('build', { async: true, inverse: 'repoCurrentBuild' }),
 
@@ -75,6 +153,21 @@ const Repo = VcsEntity.extend({
 
       return permissions.includes(id);
     }
+  }),
+
+  // slug built from normalized (by provider) owner and repo name
+  vcsSlug: computed('ownerName', 'vcsName', function () {
+    return `${this.ownerName}/${this.vcsName}`;
+  }),
+
+  urlName: computed('slug', function () {
+    const { slug = '', vcsName } = this;
+    return slug.split('/').lastObject || vcsName;
+  }),
+
+  urlOwnerName: computed('slug', function () {
+    const { slug = '', ownerName } = this;
+    return slug.split('/').firstObject || ownerName;
   }),
 
   formattedSlug: computed('owner.login', 'name', function () {
@@ -94,6 +187,20 @@ const Repo = VcsEntity.extend({
       repository_id: id
     }, (v) => v.get('repo.id') === id);
   }),
+
+  settings: computed('id', 'fetchSettings.lastSuccessful.value', function () {
+    const { value } = this.fetchSettings.lastSuccessful || {};
+    if (!value) this.fetchSettings.perform();
+    return value;
+  }),
+
+  fetchSettings: task(function* () {
+    if (!this.auth.signedIn) return {};
+    try {
+      const response = yield this.api.get(`/repo/${this.id}/settings`);
+      return this._convertV3SettingsToV2(response.settings);
+    } catch (error) {}
+  }).drop(),
 
   _buildRepoMatches(build, id) {
     // TODO: I don't understand why we need to compare string id's here
@@ -119,18 +226,7 @@ const Repo = VcsEntity.extend({
       let eventTypes = ['push', 'api', 'cron'];
       return this._buildRepoMatches(b, id) && eventTypes.includes(b.get('eventType'));
     });
-    return this._buildObservableArray(builds);
-  }),
 
-  pullRequests: computed('id', function () {
-    let id = this.id;
-    const builds = this.store.filter('build', {
-      event_type: 'pull_request',
-      repository_id: id,
-    }, (b) => {
-      const isPullRequest = b.get('eventType') === 'pull_request';
-      return this._buildRepoMatches(b, id) && isPullRequest;
-    });
     return this._buildObservableArray(builds);
   }),
 
@@ -141,24 +237,27 @@ const Repo = VcsEntity.extend({
     }, (b) => b.get('repoId') === id);
   }),
 
-  cronJobs: computed('id', function () {
-    let id = this.id;
-    return this.store.filter('cron', {
-      repository_id: id
-    }, (cron) => cron.get('branch.repoId') === id);
+  cronJobs: computed('id', 'fetchCronJobs.lastSuccessful.value', function () {
+    const crons = this.fetchCronJobs.get('lastSuccessful.value');
+    if (!crons) {
+      this.get('fetchCronJobs').perform();
+    }
+    return crons || [];
   }),
+
+  fetchCronJobs: task(function* () {
+    const id = this.id;
+    if (id) {
+      const crons = yield this.store.filter('cron', { repository_id: id }, (cron) => cron.get('branch.repoId') === id, [''], false);
+      return crons;
+    }
+  }).drop(),
 
   updateTimes() {
     let currentBuild = this.currentBuild;
     if (currentBuild) {
       return currentBuild.updateTimes();
     }
-  },
-
-  fetchSettings() {
-    const url = `/repo/${this.id}/settings`;
-    return this.api.get(url).
-      then(data => this._convertV3SettingsToV2(data['settings']));
   },
 
   startMigration() {
@@ -211,7 +310,30 @@ const Repo = VcsEntity.extend({
   unsubscribe: task(function* () {
     yield this.api.delete(this.emailSubscriptionUrl);
     yield this.reload();
-  }).drop()
+  }).drop(),
+
+  buildBackups: reads('fetchBuildBackups.lastSuccessful.value'),
+  buildBackupsLast: false,
+
+  hasBuildBackups: reads('fetchInitialBuildBackups.lastSuccessful.value'),
+
+  fetchInitialBuildBackups: task(function* () {
+    const url = `/v3/build_backups?repository_id=${this.id}&offset=0&limit=1`;
+    const result = yield this.api.get(url);
+
+    return result && result.build_backups.length > 0;
+  }).keepLatest(),
+
+  fetchBuildBackups: task(function* () {
+    const url = `/v3/build_backups?repository_id=${this.id}&offset=${this.buildBackups ? this.buildBackups.length : 0}`;
+    const result = yield this.api.get(url);
+    if (result && result['@pagination']) {
+      this.set('buildBackupsLast', result['@pagination'].is_last);
+    }
+    const oldBackups = this.buildBackups || [];
+
+    return result ? oldBackups.concat(result.build_backups) : [];
+  }).keepLatest(),
 });
 
 Repo.reopenClass({
@@ -245,39 +367,12 @@ Repo.reopenClass({
     });
   },
 
-  fetchBySlug(store, slug) {
-    let adapter, modelClass, promise, repos;
-    repos = store.peekAll('repo').filterBy('slug', slug);
-    if (repos.get('length') > 0) {
-      return repos.get('firstObject');
-    } else {
-      promise = null;
-      adapter = store.adapterFor('repo');
-      modelClass = store.modelFor('repo');
-      promise = adapter.findRecord(store, modelClass, slug).then((payload) => {
-        let i, len, record, ref, repo, result, serializer;
-        serializer = store.serializerFor('repo');
-        modelClass = store.modelFor('repo');
-        result = serializer.normalizeResponse(store, modelClass, payload, null, 'findRecord');
-        repo = store.push({
-          data: result.data
-        });
-        ref = result.included;
-        for (i = 0, len = ref.length; i < len; i++) {
-          record = ref[i];
-          store.push({
-            data: record
-          });
-        }
-        return repo;
-      });
-      return promise['catch'](() => {
-        let error;
-        error = new Error('repo not found');
-        error.slug = slug;
-        throw error;
-      });
+  fetchBySlug(store, slug, provider = defaultVcsConfig.urlPrefix) {
+    const loadedRepos = store.peekAll('repo').filterBy('provider', provider).filterBy('slug', slug);
+    if (!isEmpty(loadedRepos)) {
+      return EmberPromise.resolve(loadedRepos.firstObject);
     }
+    return store.queryRecord('repo', { slug, provider });
   },
 });
 

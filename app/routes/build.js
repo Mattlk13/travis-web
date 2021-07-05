@@ -36,7 +36,14 @@ export default TravisRoute.extend({
   afterModel(model) {
     const slug = this.modelFor('repo').get('slug');
     this.ensureBuildOwnership(model, slug);
-    return model.get('request');
+    return model.get('request').then(request => request && request.fetchMessages.perform());
+  },
+
+  beforeModel() {
+    const repo = this.modelFor('repo');
+    if (repo && !repo.repoOwnerAllowance) {
+      repo.fetchRepoOwnerAllowance.perform();
+    }
   },
 
   ensureBuildOwnership(build, urlSlug) {

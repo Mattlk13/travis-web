@@ -27,8 +27,8 @@
     </h2>
     <div class="commit-info">
       {{#if this.commit.body}}
-        <p class="commit-description" title="{{this.commit.body}}">
-          <span class="monospace {{this.commitBody}}">
+        <p class="commit-description {{this.commitBodyClass}}" title="{{this.commit.body}}">
+          <span class="monospace">
             {{format-message this.commit.body repo=this.item.repo pre=true}}
           </span>
         </p>
@@ -117,7 +117,7 @@
             <RequestIcon @event={{this.item.eventType}} @state={{item.state}} />
           {{/if}}
           <span data-test-build-header-build-state class="inner-underline">
-            #{{this.item.number}} {{humanize-state this.item.state}}
+            #{{this.item.jobNumber}} {{humanize-state this.item.state}}
           </span>
         </LinkTo>
       {{else}}
@@ -179,10 +179,17 @@
             {{format-time this.item.finishedAt}}
           </time>
         </li>
+        {{#if this.item.repo.shared}}
+          <SvgImage @name="icon-shared" @alt="Shared repository" @class="icon shared" /> Shared repository
+        {{/if}}
+      {{/if}}
+      {{#if this.build.priority}}
+        <SvgImage @name="icon-prioritize" @class="icon" />
+        <span class="build-prioritize">Prioritized build</span>
       {{/if}}
     </ul>
   </div>
-  <div class="build-tools">
+  <div class="build-tools align-action-btn">
     {{#if this.isJob}}
       <RepoActions @job={{this.item}} @repo={{this.item.repo}} />
     {{else}}
@@ -195,7 +202,7 @@
   <div class="job-container">
     <div class="job-detail-container">
       <div class="detail-job-os {{this.os}}">
-        <EmberTooltip @text={{this.os}} />
+        <EmberTooltip @text='{{this.os}} {{this.osVersion}}' />
         <SvgImage @name={{osIcon}} @class="icon" />
       </div>
       {{#if this.name}}
@@ -206,6 +213,14 @@
           </span>
         </div>
       {{/if}}
+
+      <div class="detail-job-arch">
+        <SvgImage @name="icon-arch" @class="icon" />
+        <span class="label-align" aria-label="CPU Architecture">
+          {{this.arch}}
+        </span>
+      </div>
+
       <div class="detail-job-lang">
         <SvgImage @name="icon-language" @class="icon" />
         <span class="label-align" aria-label="Language">
@@ -218,10 +233,10 @@
       </div>
     </div>
     {{#if this.environment}}
-      <div class="detail-job-env"
-        {{action "expandEnv" on="click"}}
-        {{action "expandEnv" on="mouseEnter"}}
-        {{action "expandEnv" on="mouseLeave"}}
+      <div class="detail-job-env {{if this.envExpanded 'expandEnv' 'closeEnv'}}"
+        {{on 'click' (action 'toggleEnv')}}
+        {{on 'mouseenter' (action 'expandEnv')}}
+        {{on 'mouseleave' (action 'closeEnv')}}
       >
         <SvgImage @name="icon-environment" @class="icon" />
         <span class="label-align" aria-label="Environment variables">
